@@ -421,12 +421,12 @@ plot.sd.ll.wave <- function(gene.id, gene.name, genes.expression, period=1, wave
   axis(side = 1,lwd = 3, at=seq(from=0,to=116,by=4),labels = zt.points.rep,las=2)
   
   #lines(x = seq(from=0,by=4,to=116),current.gene.expression.sd,type="o",lwd=3,col="red")
-  points(x = seq(from=0,by=4,to=68),current.gene.expression.sd,lwd=3,col="red", pch=16)
+  points(x = seq(from=0,by=4,to=68),current.gene.expression.sd,lwd=3,col="firebrick2", pch=16)
   points(x = seq(from=72,by=4,to=116),current.gene.expression.ll,lwd=3,col="salmon", pch=16)
   
   wave.sd <- sapply(seq(from=0,by=0.1,to=68), function(x) 
     wave_parameters["sd.mesor.estimate"]+wave_parameters["sd.amplitude.estimate"]*cos(period*(x*pi/12-wave_parameters["sd.peak.time.hours"]*pi/12)))
-  lines(x = seq(from=0,by=0.1,to=68),wave.sd,lwd=3,col="red")
+  lines(x = seq(from=0,by=0.1,to=68),wave.sd,lwd=3,col="firebrick2")
   
   wave.ll <- sapply(seq(from=72,by=0.1,to=116), function(x) 
     wave_parameters["ll.mesor.estimate"]+wave_parameters["ll.amplitude.estimate"]*cos(period*(x*pi/12-wave_parameters["ll.peak.time.hours"]*pi/12)))
@@ -439,10 +439,10 @@ plot.sd.ll.wave <- function(gene.id, gene.name, genes.expression, period=1, wave
     
     polygon(x = c(24*i, 24*i+8, 24*i+8, 24*i),
             y=c(min.expr-current.line, min.expr-current.line, min.expr-(current.line+(max.expr- min.expr)/40),
-                min.expr-(current.line+(max.expr- min.expr)/40)), lwd=2,border="red")
+                min.expr-(current.line+(max.expr- min.expr)/40)), lwd=2,border="firebrick2")
     polygon(x = c(24*i+8,24*(i+1),24*(i+1),24*i+8),
             y=c(min.expr-current.line, min.expr-current.line, min.expr-(current.line+(max.expr- min.expr)/40),
-                min.expr-(current.line+(max.expr- min.expr)/40)), lwd=2,border="red",col="red")
+                min.expr-(current.line+(max.expr- min.expr)/40)), lwd=2,border="firebrick2",col="firebrick2")
   }
   
   
@@ -450,13 +450,13 @@ plot.sd.ll.wave <- function(gene.id, gene.name, genes.expression, period=1, wave
   
   polygon(x = c(72, 96, 96, 72),
           y=c(min.expr-current.line, min.expr-current.line, min.expr-(current.line+(max.expr- min.expr)/40),
-              min.expr-(current.line+(max.expr- min.expr)/40)), lwd=2,border="red", col="lightpink")
+              min.expr-(current.line+(max.expr- min.expr)/40)), lwd=2,border="firebrick2", col="salmon")
   
   current.line <- (max.expr- min.expr)/10
   
   polygon(x = c(96, 120, 120, 96),
           y=c(min.expr-current.line, min.expr-current.line, min.expr-(current.line+(max.expr- min.expr)/40),
-              min.expr-(current.line+(max.expr- min.expr)/40)), lwd=2,border="red", col="lightpink")
+              min.expr-(current.line+(max.expr- min.expr)/40)), lwd=2,border="firebrick2", col="salmon")
   
   return(0)  
 }
@@ -616,12 +616,12 @@ plot.sd.dd.wave <- function(gene.id, gene.name, genes.expression, period=1, wave
   axis(side = 1,lwd = 3, at=seq(from=0,to=116,by=4),labels = zt.points.rep,las=2)
   
   #lines(x = seq(from=0,by=4,to=116),current.gene.expression.sd,type="o",lwd=3,col="blue")
-  points(x = seq(from=0,by=4,to=68),current.gene.expression.sd,lwd=3,col="tomato3", pch=16)
+  points(x = seq(from=0,by=4,to=68),current.gene.expression.sd,lwd=3,col="firebrick2", pch=16)
   points(x = seq(from=72,by=4,to=116),current.gene.expression.dd,lwd=3,col="red4", pch=16)
   
   wave.sd <- sapply(seq(from=0,by=0.1,to=68), function(x) 
     wave_parameters["sd.mesor.estimate"]+wave_parameters["sd.amplitude.estimate"]*cos(period*(x*pi/12-wave_parameters["sd.peak.time.hours"]*pi/12)))
-  lines(x = seq(from=0,by=0.1,to=68),wave.sd,lwd=3,col="tomato3")
+  lines(x = seq(from=0,by=0.1,to=68),wave.sd,lwd=3,col="firebrick2")
   
   wave.dd <- sapply(seq(from=72,by=0.1,to=116), function(x) 
     wave_parameters["dd.mesor.estimate"]+wave_parameters["dd.amplitude.estimate"]*cos(period*(x*pi/12-wave_parameters["dd.peak.time.hours"]*pi/12)))
@@ -634,10 +634,10 @@ plot.sd.dd.wave <- function(gene.id, gene.name, genes.expression, period=1, wave
     
     polygon(x = c(24*i, 24*i+8, 24*i+8, 24*i),
             y=c(min.expr-current.line, min.expr-current.line, min.expr-(current.line+(max.expr- min.expr)/40),
-                min.expr-(current.line+(max.expr- min.expr)/40)), lwd=2,border="tomato3")
+                min.expr-(current.line+(max.expr- min.expr)/40)), lwd=2,border="firebrick2")
     polygon(x = c(24*i+8,24*(i+1),24*(i+1),24*i+8),
             y=c(min.expr-current.line, min.expr-current.line, min.expr-(current.line+(max.expr- min.expr)/40),
-                min.expr-(current.line+(max.expr- min.expr)/40)), lwd=2,border="tomato3",col="tomato3")
+                min.expr-(current.line+(max.expr- min.expr)/40)), lwd=2,border="firebrick2",col="firebrick2")
   }
   
   
@@ -645,13 +645,13 @@ plot.sd.dd.wave <- function(gene.id, gene.name, genes.expression, period=1, wave
   
   polygon(x = c(72, 96, 96, 72),
           y=c(min.expr-current.line, min.expr-current.line, min.expr-(current.line+(max.expr- min.expr)/40),
-              min.expr-(current.line+(max.expr- min.expr)/40)), lwd=2,border="tomato3", col="red4")
+              min.expr-(current.line+(max.expr- min.expr)/40)), lwd=2,border="firebrick2", col="red4")
   
   current.line <- (max.expr- min.expr)/10
   
   polygon(x = c(96, 120, 120, 96),
           y=c(min.expr-current.line, min.expr-current.line, min.expr-(current.line+(max.expr- min.expr)/40),
-              min.expr-(current.line+(max.expr- min.expr)/40)), lwd=2,border="tomato3", col="red4")
+              min.expr-(current.line+(max.expr- min.expr)/40)), lwd=2,border="firebrick2", col="red4")
   
   return(0)  
 }
@@ -673,4 +673,49 @@ create_motif_table <- function(non.redundant.motif.file)
   return(motifs_motif_table)
 }
 
+heatmap.gene <- function(gene.id)
+{
+  current.gene.mean.sd.gene.expression <- (scaled.sd.gene.expression[gene.id,seq(from=1,to=16,by=3)] + scaled.sd.gene.expression[gene.id,seq(from=2,to=17,by=3)] + scaled.sd.gene.expression[gene.id,seq(from=3,to=18,by=3)])/3
+  current.gene.mean.sd.gene.expression <- c(current.gene.mean.sd.gene.expression, current.gene.mean.sd.gene.expression[1])
+  spline.current.gene.mean.sd.gene.expression <- spline(x=seq(from=0,to=24,by=4),y=current.gene.mean.sd.gene.expression,n = 100)
+  col_fun_gene = colorRamp2(c(min(spline.current.gene.mean.sd.gene.expression$y),
+                              (min(spline.current.gene.mean.sd.gene.expression$y) + max(spline.current.gene.mean.sd.gene.expression$y)) /2,
+                              max(spline.current.gene.mean.sd.gene.expression$y)), 
+                            c("black","blue","yellow"))
+  cols.gene <- col_fun_gene(x = spline.current.gene.mean.sd.gene.expression$y)
+  
+  par(mar=c(0,0,0,0))
+  plot(x=1,y=1,col="white",xlim=c(-1,25),ylim=c(0,14),axes=F,xlab="",ylab="")
+  
+  polygon(x = c(0,8,8,0),y=c(2, 2, 0, 0),lwd=2,border="red")
+  polygon(x = c(8,24,24,8),y=c(2, 2, 0, 0),lwd=2,border="red",col="red") 
+  
+  for(i in 1:99)
+  {
+    polygon(x = c(spline.current.gene.mean.sd.gene.expression$x[i],spline.current.gene.mean.sd.gene.expression$x[i+1],
+                  spline.current.gene.mean.sd.gene.expression$x[i+1],spline.current.gene.mean.sd.gene.expression$x[i]),
+            y=c(2.5, 2.5, 5, 5),lwd=2,border=cols.gene[i],col=cols.gene[i]) 
+  }
+  
+  current.gene.mean.ld.gene.expression <- (scaled.ld.gene.expression[gene.id,seq(from=1,to=16,by=3)] + scaled.ld.gene.expression[gene.id,seq(from=2,to=17,by=3)] + scaled.ld.gene.expression[gene.id,seq(from=3,to=18,by=3)])/3
+  current.gene.mean.ld.gene.expression <- c(current.gene.mean.ld.gene.expression, current.gene.mean.ld.gene.expression[1])
+  spline.current.gene.mean.ld.gene.expression <- spline(x=seq(from=0,to=24,by=4),y=current.gene.mean.ld.gene.expression,n = 100)
+  col_fun_gene = colorRamp2(c(min(spline.current.gene.mean.ld.gene.expression$y),
+                              (min(spline.current.gene.mean.ld.gene.expression$y) + max(spline.current.gene.mean.ld.gene.expression$y)) /2,
+                              max(spline.current.gene.mean.ld.gene.expression$y)), 
+                            c("black","blue","yellow"))
+  cols.gene <- col_fun_gene(x = spline.current.gene.mean.ld.gene.expression$y)
+  
+  
+  polygon(x = c(0,16,16,0),y=c(8.5, 8.5, 6.5, 6.5),lwd=2,border="blue")
+  polygon(x = c(16,24,24,16),y=c(8.5, 8.5, 6.5, 6.5),lwd=2,border="blue",col="blue") 
+  
+  for(i in 1:99)
+  {
+    polygon(x = c(spline.current.gene.mean.ld.gene.expression$x[i],spline.current.gene.mean.ld.gene.expression$x[i+1],
+                  spline.current.gene.mean.ld.gene.expression$x[i+1],spline.current.gene.mean.ld.gene.expression$x[i]),
+            y=c(9, 9, 11.5, 11.5),lwd=2,border=cols.gene[i],col=cols.gene[i]) 
+  }
+  
+}
 
