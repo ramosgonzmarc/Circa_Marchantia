@@ -1,4 +1,3 @@
-.libPaths("/home/marcos/R/x86_64-pc-linux-gnu-library/4.1")
 
 ############################ ANALYSIS ###################################
 # Read data
@@ -22,6 +21,7 @@ library("clusterProfiler")
 #Install our annotation package for Marchantia polymorpha
 #install.packages("./org.Mpolymorpha.eg.db/", repos=NULL, type="source")
 library("org.Mpolymorpha71.eg.db")
+library(enrichplot)
 columns(org.Mpolymorpha71.eg.db)
 
 low.exp.genes <- names(which(apply(X = genes.expression,MARGIN = 1,FUN = max) < 2))
@@ -34,8 +34,12 @@ ego.low.exp.genes <- enrichGO(gene = low.exp.genes,
                         readable      = F,
                         keyType = "GID")
 
-as.data.frame(ego.low.exp.genes)$Description
 barplot(ego.low.exp.genes, showCategory = 20)
+
+png("ego_low_exp_genes.png", res = 230, width = 1700, height = 1700)
+emapplot(pairwise_termsim(ego.low.exp.genes))
+dev.off()
+
 
 # Gene expression matrix for samples under light-dark cycles
 ld.zt <- paste("ld",paste0("zt",sprintf(fmt = "%02d",seq(from=0,to=20,by=4))),sep="_")
@@ -65,6 +69,32 @@ ld.ll.gene.expression <- genes.expression[,ll.ld.zt.i]
 sd.ll.gene.expression <- genes.expression[,ll.sd.zt.i]
 
 
+# Global exploration of gene expression in each condition
+mean(ld.gene.expression)
+mean(ld.ll.gene.expression)
+mean(ld.dd.gene.expression)
+mean(sd.gene.expression)
+mean(sd.ll.gene.expression)
+mean(sd.dd.gene.expression)
+
+median(ld.gene.expression)
+median(ld.ll.gene.expression)
+median(ld.dd.gene.expression)
+median(sd.gene.expression)
+median(sd.ll.gene.expression)
+median(sd.dd.gene.expression)
+
+# Plot expression
+boxplot(log2(as.numeric(apply(ld.gene.expression, MARGIN = 1, mean))+1),
+        log2(as.numeric(apply(ld.ll.gene.expression, MARGIN = 1, mean))+1),
+        log2(as.numeric(apply(ld.dd.gene.expression, MARGIN = 1, mean))+1),
+        log2(as.numeric(apply(sd.gene.expression, MARGIN = 1, mean))+1),
+        log2(as.numeric(apply(sd.ll.gene.expression, MARGIN = 1, mean))+1),
+        log2(as.numeric(apply(sd.dd.gene.expression, MARGIN = 1, mean))+1))
+
+
+
+
 ######### Statistical analysis of circadian genes with CircaCompare  ###########
 
 # First of all, define new expressed-genes background set
@@ -76,7 +106,7 @@ dim(bg_table)
 # With 24 h period
 library(circacompare)
 
-results.ld <- matrix(nrow=length(bg_set),ncol=6)
+results.ld <- matrix(nrow=length(bg_set),ncol=9)
 rownames(results.ld) <- bg_set
 dim(results.ld)
 
@@ -95,7 +125,9 @@ for(i in 1:length(bg_set))
     
     out.i <- circa_single(x = ld.df, col_time = "time", col_outcome = "measure", period = 24,
                  alpha_threshold = 1)
-    results.ld[i,] <- out.i[[2]][,2]
+    #results.ld[i,] <- out.i[[2]][,2]
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    results.ld[i,] <- c(out.i[[2]][,2], error.i)
   }
   else
   {
@@ -103,8 +135,8 @@ for(i in 1:length(bg_set))
   }
 }
 
-colnames(results.ld) <- out.i[[2]][,1]
-write.table(results.ld,file="circacompare_ld_24.tsv", sep="\t")
+colnames(results.ld) <- c(out.i[[2]][,1], "error_mesor", "error_amp", "error_phase")
+write.table(results.ld,file="circacompare_ld_24_with_errors.tsv", sep="\t")
 
 # With 12 h period
 library(circacompare)
@@ -176,7 +208,7 @@ write.table(results.sd,file="circacompare_sd_24.tsv", sep="\t")
 # With 12 h period
 library(circacompare)
 
-results.sd <- matrix(nrow=length(bg_set),ncol=6)
+results.sd <- matrix(nrow=length(bg_set),ncol=9)
 rownames(results.sd) <- bg_set
 dim(results.sd)
 
@@ -195,7 +227,10 @@ for(i in 1:length(bg_set))
     
     out.i <- circa_single(x = sd.df, col_time = "time", col_outcome = "measure", period = 12,
                           alpha_threshold = 1)
-    results.sd[i,] <- out.i[[2]][,2]
+    #results.sd[i,] <- out.i[[2]][,2]
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    results.sd[i,] <- c(out.i[[2]][,2], error.i)
+    
   }
   else
   {
@@ -203,8 +238,8 @@ for(i in 1:length(bg_set))
   }
 }
 
-colnames(results.sd) <- out.i[[2]][,1]
-write.table(results.sd,file="circacompare_sd_12.tsv", sep="\t")
+colnames(results.sd) <- c(out.i[[2]][,1], "error_mesor", "error_amp", "error_phase")
+write.table(results.sd,file="circacompare_sd_12_with_errors.tsv", sep="\t")
 
 # Rhythmicity under light/dark cycles
 #LD
@@ -292,18 +327,20 @@ rhythmic.max.expression <- apply(X = genes.expression[complete.ld.sd.rhythmic.ge
 non.rhythmic.max.expression <- apply(X = genes.expression[intersect(non.rhythmic.ld.genes,non.rhythmic.sd.genes),
                                                           c(ld.zt.i,sd.zt.i)], MARGIN = 1,FUN = max)
 
-png("expression_vs_rhythmicity.png", width = 1500, height = 1500, res=300)
+png("expression_vs_rhythmicity.png", width = 1300, height = 1500, res=300)
 par(lwd=3)
 boxplot(rhythmic.max.expression, non.rhythmic.max.expression, outline=F,col=c("chartreuse4","royalblue3"),
-        names=c("Rhythmic","Non rhythmic"),ylab="FPKM",cex.lab=1.5,las=1, cex.axis=1.5, main= "Distribution of expression levels")
+        names=c("Rhythmic","Arrhythmic"),ylab="FPKM",cex.lab=1.5,las=1, cex.axis=1.5, main= "Distribution of expression levels")
 dev.off()
 
-wilcox.test(rhythmic.max.expression,non.rhythmic.max.expression,alternative="greater")
+wilcox.test(rhythmic.max.expression,non.rhythmic.max.expression,alternative="greater")$p.value
+
+
 
 ##### Difference between LD and SD in a parametric manner, complete set
 library(circacompare)
 
-results.ld.sd <- matrix(nrow=length(bg_set),ncol=15)
+results.ld.sd <- matrix(nrow=length(bg_set),ncol=21)
 rownames(results.ld.sd) <- bg_set
 dim(results.ld.sd)
 
@@ -327,7 +364,9 @@ for(i in 1:length(bg_set))
     
     out.i <- circacompare(x = ld.sd.df, col_time = "time", col_group = "group",
                           col_outcome = "measure",alpha_threshold = 1)
-    results.ld.sd[i,] <- out.i[[2]][,2]
+    
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    results.ld.sd[i,] <- c(out.i[[2]][,2], error.i)
   }
   else
   {
@@ -335,17 +374,23 @@ for(i in 1:length(bg_set))
   }
 }
 
-colnames(results.ld.sd) <- out.i[[2]][,1]
-write.table(results.ld.sd,file="circacompare_ld_sd_complete.tsv", sep="\t")
+# k, k1, alpha, alpha1, phi, phi1
+colnames(results.ld.sd) <- c(out.i[[2]][,1], "error_mesor_1", "error_mesor_2",
+                             "error_amp_1", "error_amp_2", "error_phase_1", 
+                             "error_phase_2")
+write.table(results.ld.sd,file="circacompare_ld_sd_complete_with_errors.tsv", sep="\t")
 
 ##### Difference between LD and SD in a parametric manner, rhythmic in both
 library(circacompare)
+
+complete.ld.rhythmic.genes <- read.table("tables/ld.rhythmic.table.tsv", header = T)$V1
+complete.sd.rhythmic.genes <- read.table("tables/sd.rhythmic.table.tsv", header = T)$V1
 
 intersect_set <- intersect(complete.ld.rhythmic.genes, complete.sd.rhythmic.genes)
 intersect_table <- genes.expression[intersect_set,]
 dim(intersect_table)
 
-results.ld.sd.intersect <- matrix(nrow=length(intersect_set),ncol=15)
+results.ld.sd.intersect <- matrix(nrow=length(intersect_set),ncol=21)
 rownames(results.ld.sd.intersect) <- intersect_set
 dim(results.ld.sd.intersect)
 
@@ -371,7 +416,10 @@ for(i in 1:length(intersect_set))
     
     out.i <- circacompare(x = ld.sd.df, col_time = "time", col_group = "group",
                           col_outcome = "measure",alpha_threshold = 1)
-    results.ld.sd.intersect[i,] <- out.i[[2]][,2]
+    
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    
+    results.ld.sd.intersect[i,] <- c(out.i[[2]][,2], error.i)
   }
   else
   {
@@ -379,8 +427,10 @@ for(i in 1:length(intersect_set))
   }
 }
 
-colnames(results.ld.sd.intersect) <- out.i[[2]][,1]
-write.table(results.ld.sd.intersect,file="circacompare_ld_sd_intersection.tsv", sep="\t")
+colnames(results.ld.sd.intersect) <- c(out.i[[2]][,1], "error_mesor_1", "error_mesor_2",
+                                       "error_amp_1", "error_amp_2", "error_phase_1", 
+                                       "error_phase_2")
+write.table(results.ld.sd.intersect,file="circacompare_ld_sd_intersection_with_errors.tsv", sep="\t")
 
 
 ################# Free-running ######################33
@@ -392,7 +442,7 @@ ld_set <- complete.ld.rhythmic.genes
 ld_set_table <- genes.expression[ld_set,]
 dim(ld_set_table)
 
-results.ld.ll <- matrix(nrow=length(ld_set),ncol=6)
+results.ld.ll <- matrix(nrow=length(ld_set),ncol=9)
 rownames(results.ld.ll) <- ld_set
 dim(results.ld.ll)
 
@@ -416,15 +466,17 @@ for(i in 1:length(ld_set))
     
     out.i <- circa_single(x = ld.ll.df, col_time = "time", col_outcome = "measure", period = 24,
                           alpha_threshold = 1)
-    results.ld.ll[i,] <- out.i[[2]][,2]
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    
+    results.ld.ll[i,] <- c(out.i[[2]][,2], error.i)
   }
   else
   {
     results.ld.ll[i,] <- NA
   }
 }
-colnames(results.ld.ll) <- out.i[[2]][,1]
-write.table(results.ld.ll,file="circacompare_ld_ll.tsv", sep="\t")
+colnames(results.ld.ll) <- c(out.i[[2]][,1], "error_mesor", "error_amp", "error_phase")
+write.table(results.ld.ll,file="circacompare_ld_ll_with_errors.tsv", sep="\t")
 
 # LD - LL 12 h
 # Only for rhythmic genes in LD
@@ -432,7 +484,7 @@ ld_set <- complete.ld.rhythmic.genes
 ld_set_table <- genes.expression[ld_set,]
 dim(ld_set_table)
 
-results.ld.ll <- matrix(nrow=length(ld_set),ncol=6)
+results.ld.ll <- matrix(nrow=length(ld_set),ncol=9)
 rownames(results.ld.ll) <- ld_set
 dim(results.ld.ll)
 
@@ -456,15 +508,18 @@ for(i in 1:length(ld_set))
     
     out.i <- circa_single(x = ld.ll.df, col_time = "time", col_outcome = "measure", period = 12,
                           alpha_threshold = 1)
-    results.ld.ll[i,] <- out.i[[2]][,2]
+    
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    
+    results.ld.ll[i,] <- c(out.i[[2]][,2], error.i)
   }
   else
   {
     results.ld.ll[i,] <- NA
   }
 }
-colnames(results.ld.ll) <- out.i[[2]][,1]
-write.table(results.ld.ll,file="circacompare_ld_ll_12.tsv", sep="\t")
+colnames(results.ld.ll) <- c(out.i[[2]][,1], "error_mesor", "error_amp", "error_phase")
+write.table(results.ld.ll,file="circacompare_ld_ll_12_with_errors.tsv", sep="\t")
 
 # LD - DD 24 h
 # Only for rhythmic genes in LD
@@ -472,7 +527,7 @@ ld_set <- complete.ld.rhythmic.genes
 ld_set_table <- genes.expression[ld_set,]
 dim(ld_set_table)
 
-results.ld.dd <- matrix(nrow=length(ld_set),ncol=6)
+results.ld.dd <- matrix(nrow=length(ld_set),ncol=9)
 rownames(results.ld.dd) <- ld_set
 dim(results.ld.dd)
 
@@ -495,15 +550,18 @@ for(i in 1:length(ld_set))
     
     out.i <- circa_single(x = ld.dd.df, col_time = "time", col_outcome = "measure", period = 24,
                           alpha_threshold = 1)
-    results.ld.dd[i,] <- out.i[[2]][,2]
+    
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    
+    results.ld.dd[i,] <- c(out.i[[2]][,2], error.i)
   }
   else
   {
     results.ld.dd[i,] <- NA
   }
 }
-colnames(results.ld.dd) <- out.i[[2]][,1]
-write.table(results.ld.dd,file="circacompare_ld_dd.tsv", sep="\t")
+colnames(results.ld.dd) <- c(out.i[[2]][,1], "error_mesor", "error_amp", "error_phase")
+write.table(results.ld.dd,file="circacompare_ld_dd_with_errors.tsv", sep="\t")
 
 # LD - DD 12 h
 # Only for rhythmic genes in LD
@@ -511,7 +569,7 @@ ld_set <- complete.ld.rhythmic.genes
 ld_set_table <- genes.expression[ld_set,]
 dim(ld_set_table)
 
-results.ld.dd <- matrix(nrow=length(ld_set),ncol=6)
+results.ld.dd <- matrix(nrow=length(ld_set),ncol=9)
 rownames(results.ld.dd) <- ld_set
 dim(results.ld.dd)
 
@@ -534,15 +592,17 @@ for(i in 1:length(ld_set))
     
     out.i <- circa_single(x = ld.dd.df, col_time = "time", col_outcome = "measure", period = 12,
                           alpha_threshold = 1)
-    results.ld.dd[i,] <- out.i[[2]][,2]
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    
+    results.ld.dd[i,] <- c(out.i[[2]][,2], error.i)
   }
   else
   {
     results.ld.dd[i,] <- NA
   }
 }
-colnames(results.ld.dd) <- out.i[[2]][,1]
-write.table(results.ld.dd,file="circacompare_ld_dd_12.tsv", sep="\t")
+colnames(results.ld.dd) <- c(out.i[[2]][,1], "error_mesor", "error_amp", "error_phase")
+write.table(results.ld.dd,file="circacompare_ld_dd_12_with_errors.tsv", sep="\t")
 
 # SD - LL 24 h
 # Only for rhythmic genes in SD
@@ -552,7 +612,7 @@ sd_set <- complete.sd.rhythmic.genes
 sd_set_table <- genes.expression[sd_set,]
 dim(sd_set_table)
 
-results.sd.ll <- matrix(nrow=length(sd_set),ncol=6)
+results.sd.ll <- matrix(nrow=length(sd_set),ncol=9)
 rownames(results.sd.ll) <- sd_set
 dim(results.sd.ll)
 
@@ -575,15 +635,17 @@ for(i in 1:length(sd_set))
     
     out.i <- circa_single(x = sd.ll.df, col_time = "time", col_outcome = "measure", period = 24,
                           alpha_threshold = 1)
-    results.sd.ll[i,] <- out.i[[2]][,2]
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    
+    results.sd.ll[i,] <- c(out.i[[2]][,2], error.i)
   }
   else
   {
     results.sd.ll[i,] <- NA
   }
 }
-colnames(results.sd.ll) <- out.i[[2]][,1]
-write.table(results.sd.ll,file="circacompare_sd_ll.tsv", sep="\t")
+colnames(results.sd.ll) <- c(out.i[[2]][,1], "error_mesor", "error_amp", "error_phase")
+write.table(results.sd.ll,file="circacompare_sd_ll_with_errors.tsv", sep="\t")
 
 # SD - LL 12 h
 # Only for rhythmic genes in SD
@@ -591,7 +653,7 @@ sd_set <- complete.sd.rhythmic.genes
 sd_set_table <- genes.expression[sd_set,]
 dim(sd_set_table)
 
-results.sd.ll <- matrix(nrow=length(sd_set),ncol=6)
+results.sd.ll <- matrix(nrow=length(sd_set),ncol=9)
 rownames(results.sd.ll) <- sd_set
 dim(results.sd.ll)
 
@@ -614,15 +676,17 @@ for(i in 1:length(sd_set))
     
     out.i <- circa_single(x = sd.ll.df, col_time = "time", col_outcome = "measure", period = 12,
                           alpha_threshold = 1)
-    results.sd.ll[i,] <- out.i[[2]][,2]
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    
+    results.sd.ll[i,] <- c(out.i[[2]][,2], error.i)
   }
   else
   {
     results.sd.ll[i,] <- NA
   }
 }
-colnames(results.sd.ll) <- out.i[[2]][,1]
-write.table(results.sd.ll,file="circacompare_sd_ll_12.tsv", sep="\t")
+colnames(results.sd.ll) <- c(out.i[[2]][,1], "error_mesor", "error_amp", "error_phase")
+write.table(results.sd.ll,file="circacompare_sd_ll_12_with_errors.tsv", sep="\t")
 
 # SD - DD 24 h
 # Only for rhythmic genes in SD
@@ -630,7 +694,7 @@ sd_set <- complete.sd.rhythmic.genes
 sd_set_table <- genes.expression[sd_set,]
 dim(sd_set_table)
 
-results.sd.dd <- matrix(nrow=length(sd_set),ncol=6)
+results.sd.dd <- matrix(nrow=length(sd_set),ncol=9)
 rownames(results.sd.dd) <- sd_set
 dim(results.sd.dd)
 
@@ -653,15 +717,17 @@ for(i in 1:length(sd_set))
     
     out.i <- circa_single(x = sd.dd.df, col_time = "time", col_outcome = "measure", period = 24,
                           alpha_threshold = 1)
-    results.sd.dd[i,] <- out.i[[2]][,2]
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    
+    results.sd.dd[i,] <- c(out.i[[2]][,2], error.i)
   }
   else
   {
     results.sd.dd[i,] <- NA
   }
 }
-colnames(results.sd.dd) <- out.i[[2]][,1]
-write.table(results.sd.dd,file="circacompare_sd_dd.tsv", sep="\t")
+colnames(results.sd.dd) <- c(out.i[[2]][,1], "error_mesor", "error_amp", "error_phase")
+write.table(results.sd.dd,file="circacompare_sd_dd_with_errors.tsv", sep="\t")
 
 # SD - DD 12 h
 # Only for rhythmic genes in SD
@@ -669,7 +735,7 @@ sd_set <- complete.sd.rhythmic.genes
 sd_set_table <- genes.expression[sd_set,]
 dim(sd_set_table)
 
-results.sd.dd <- matrix(nrow=length(sd_set),ncol=6)
+results.sd.dd <- matrix(nrow=length(sd_set),ncol=9)
 rownames(results.sd.dd) <- sd_set
 dim(results.sd.dd)
 
@@ -692,17 +758,21 @@ for(i in 1:length(sd_set))
     
     out.i <- circa_single(x = sd.dd.df, col_time = "time", col_outcome = "measure", period = 12,
                           alpha_threshold = 1)
-    results.sd.dd[i,] <- out.i[[2]][,2]
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    
+    results.sd.dd[i,] <- c(out.i[[2]][,2], error.i)
   }
   else
   {
     results.sd.dd[i,] <- NA
   }
 }
-colnames(results.sd.dd) <- out.i[[2]][,1]
-write.table(results.sd.dd,file="circacompare_sd_dd_12.tsv", sep="\t")
+colnames(results.sd.dd) <- c(out.i[[2]][,1], "error_mesor", "error_amp", "error_phase")
+write.table(results.sd.dd,file="circacompare_sd_dd_12_with_errors.tsv", sep="\t")
 
-# Exploration of free-running results
+
+
+############# Exploration of free-running results
 # LD - LL
 results.ld.ll.24 <- read.table("tables/circacompare_ld_ll.tsv", header = T, sep = "\t")
 sum(results.ld.ll.24$rhythmic_p < 0.05, na.rm = T)/length(bg_set)
@@ -718,6 +788,15 @@ complete.ld.ll.rhythmic.genes <- unique(c(rhythmic.genes.ld.ll.24,rhythmic.genes
 length(complete.ld.ll.rhythmic.genes)/length(bg_set)
 
 write.table(complete.ld.ll.rhythmic.genes,file="tables/ld.ll.rhythmic.table.tsv", sep="\t")
+
+png("hist_phase_ld_ll.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(results.ld.ll.24[unique(c(rhythmic.genes.ld.ll.24, 
+                               rhythmic.genes.ld.ll.12)),"peak_time_hours" ],
+     col="lightblue", ylim=c(0,400),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="")
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+dev.off()
+
 
 # LD - DD
 results.ld.dd.24 <- read.table("tables/circacompare_ld_dd.tsv", header = T, sep = "\t")
@@ -735,6 +814,14 @@ length(complete.ld.dd.rhythmic.genes)/length(bg_set)
 
 write.table(complete.ld.dd.rhythmic.genes,file="tables/ld.dd.rhythmic.table.tsv", sep="\t")
 
+png("hist_phase_ld_dd.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(results.ld.dd.24[unique(c(rhythmic.genes.ld.dd.24, 
+                               rhythmic.genes.ld.dd.12)),"peak_time_hours" ],
+     col="darkblue", ylim=c(0,400),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="")
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+dev.off()
+
 # SD - LL
 results.sd.ll.24 <- read.table("tables/circacompare_sd_ll.tsv", header = T, sep = "\t")
 sum(results.sd.ll.24$rhythmic_p < 0.05, na.rm = T)/length(bg_set)
@@ -751,6 +838,14 @@ length(complete.sd.ll.rhythmic.genes)/length(bg_set)
 
 write.table(complete.sd.ll.rhythmic.genes,file="tables/sd.ll.rhythmic.table.tsv", sep="\t")
 
+png("hist_phase_sd_ll.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(results.sd.ll.24[unique(c(rhythmic.genes.sd.ll.24, 
+                               rhythmic.genes.sd.ll.12)),"peak_time_hours" ],
+     col="lightsalmon", ylim=c(0,400),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="")
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+dev.off()
+
 # SD - DD
 results.sd.dd.24 <- read.table("tables/circacompare_sd_dd.tsv", header = T, sep = "\t")
 sum(results.sd.dd.24$rhythmic_p < 0.05, na.rm = T)/length(bg_set)
@@ -766,6 +861,15 @@ complete.sd.dd.rhythmic.genes <- unique(c(rhythmic.genes.sd.dd.24,rhythmic.genes
 length(complete.sd.dd.rhythmic.genes)/length(bg_set)
 
 write.table(complete.sd.dd.rhythmic.genes,file="tables/sd.dd.rhythmic.table.tsv", sep="\t")
+
+png("hist_phase_sd_dd.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(results.sd.dd.24[unique(c(rhythmic.genes.sd.dd.24, 
+                               rhythmic.genes.sd.dd.12)),"peak_time_hours" ],
+     col="firebrick4", ylim=c(0,400),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="")
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+dev.off()
+
 
 # Create barplots of each type of retained rhythmicity for LD transitions
 bg_set <- names(which(apply(X = genes.expression,MARGIN = 1,FUN = max) >= 2))
@@ -905,6 +1009,8 @@ dev.off()
 
 
 #######Change from 1 to 2 peaks#########
+length(rhythmic.genes.sd.12)
+length(rhythmic.genes.ld.12)
 
 only.rhythmic.genes.sd.12 <- setdiff(rhythmic.genes.sd.12, rhythmic.genes.sd)
 only.rhythmic.genes.ld.24 <- setdiff(rhythmic.genes.ld, rhythmic.genes.ld.12)
@@ -916,13 +1022,14 @@ only.rhythmic.genes.sd.24 <- setdiff(rhythmic.genes.sd, rhythmic.genes.sd.12)
 two.peaks.change.genes.reverse <- intersect(only.rhythmic.genes.sd.24, only.rhythmic.genes.ld.12)
 length(two.peaks.change.genes.reverse) # 451 genes changed from one peak in SD to two in LD
 
+
 #### Free running parameters
 ## Compare LD against LL for estimating parameters
 # LD to LL
 library(circacompare)
 
 complete.ld.ll.rhythmic.genes <- read.table(file="tables/ld.ll.rhythmic.table.tsv", sep="\t")$x
-circacompare.ld.ll <- matrix(nrow=length(complete.ld.ll.rhythmic.genes),ncol=15)
+circacompare.ld.ll <- matrix(nrow=length(complete.ld.ll.rhythmic.genes),ncol=21)
 rownames(circacompare.ld.ll) <- complete.ld.ll.rhythmic.genes
 
 for(i in 1:length(complete.ld.ll.rhythmic.genes))
@@ -942,7 +1049,10 @@ for(i in 1:length(complete.ld.ll.rhythmic.genes))
     
     out.i <- circacompare(x = ld.ll.df, col_time = "time", col_group = "group",
                           col_outcome = "measure",alpha_threshold = 1)
-    circacompare.ld.ll[i,] <- out.i[[2]][,2]
+    #circacompare.ld.ll[i,] <- out.i[[2]][,2]
+    
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    circacompare.ld.ll[i,] <- c(out.i[[2]][,2], error.i)
   }
   else
   {
@@ -951,14 +1061,17 @@ for(i in 1:length(complete.ld.ll.rhythmic.genes))
   
 }
 
-colnames(circacompare.ld.ll) <- out.i[[2]][,1]
-write.table(circacompare.ld.ll,file="tables/estimates_ld_ll.tsv", sep="\t")
+colnames(circacompare.ld.ll) <- c(out.i[[2]][,1], "error_mesor_1", "error_mesor_2",
+                             "error_amp_1", "error_amp_2", "error_phase_1", 
+                             "error_phase_2")
+head(circacompare.ld.ll)
+write.table(circacompare.ld.ll,file="tables/estimates_ld_ll_with_errors.tsv", sep="\t")
 
 # LD to DD
 library(circacompare)
 
 complete.ld.dd.rhythmic.genes <- read.table(file="tables/ld.dd.rhythmic.table.tsv", sep="\t")$x
-circacompare.ld.dd <- matrix(nrow=length(complete.ld.dd.rhythmic.genes),ncol=15)
+circacompare.ld.dd <- matrix(nrow=length(complete.ld.dd.rhythmic.genes),ncol=21)
 rownames(circacompare.ld.dd) <- complete.ld.dd.rhythmic.genes
 
 for(i in 1:length(complete.ld.dd.rhythmic.genes))
@@ -978,7 +1091,10 @@ for(i in 1:length(complete.ld.dd.rhythmic.genes))
     
     out.i <- circacompare(x = ld.dd.df, col_time = "time", col_group = "group",
                           col_outcome = "measure",alpha_threshold = 1)
-    circacompare.ld.dd[i,] <- out.i[[2]][,2]
+    #circacompare.ld.dd[i,] <- out.i[[2]][,2]
+    
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    circacompare.ld.dd[i,] <- c(out.i[[2]][,2], error.i)
   }
   else
   {
@@ -987,15 +1103,17 @@ for(i in 1:length(complete.ld.dd.rhythmic.genes))
   
 }
 
-colnames(circacompare.ld.dd) <- out.i[[2]][,1]
-write.table(circacompare.ld.dd,file="tables/estimates_ld_dd.tsv", sep="\t")
+colnames(circacompare.ld.dd) <- c(out.i[[2]][,1], "error_mesor_1", "error_mesor_2",
+                                  "error_amp_1", "error_amp_2", "error_phase_1", 
+                                  "error_phase_2")
+write.table(circacompare.ld.dd,file="tables/estimates_ld_dd_with_errors.tsv", sep="\t")
 
 
 # SD to LL
 library(circacompare)
 
 complete.sd.ll.rhythmic.genes <- read.table(file="tables/sd.ll.rhythmic.table.tsv", sep="\t")$x
-circacompare.sd.ll <- matrix(nrow=length(complete.sd.ll.rhythmic.genes),ncol=15)
+circacompare.sd.ll <- matrix(nrow=length(complete.sd.ll.rhythmic.genes),ncol=21)
 rownames(circacompare.sd.ll) <- complete.sd.ll.rhythmic.genes
 
 for(i in 1:length(complete.sd.ll.rhythmic.genes))
@@ -1015,7 +1133,10 @@ for(i in 1:length(complete.sd.ll.rhythmic.genes))
     
     out.i <- circacompare(x = sd.ll.df, col_time = "time", col_group = "group",
                           col_outcome = "measure",alpha_threshold = 1)
-    circacompare.sd.ll[i,] <- out.i[[2]][,2]
+    #circacompare.sd.ll[i,] <- out.i[[2]][,2]
+    
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    circacompare.sd.ll[i,] <- c(out.i[[2]][,2], error.i)
   }
   else
   {
@@ -1024,14 +1145,17 @@ for(i in 1:length(complete.sd.ll.rhythmic.genes))
   
 }
 
-colnames(circacompare.sd.ll) <- out.i[[2]][,1]
-write.table(circacompare.sd.ll,file="tables/estimates_sd_ll.tsv", sep="\t")
+colnames(circacompare.sd.ll) <- c(out.i[[2]][,1], "error_mesor_1", "error_mesor_2",
+                                  "error_amp_1", "error_amp_2", "error_phase_1", 
+                                  "error_phase_2")
+head(circacompare.sd.ll)
+write.table(circacompare.sd.ll,file="tables/estimates_sd_ll_with_errors.tsv", sep="\t")
 
 # SD to DD
 library(circacompare)
 
 complete.sd.dd.rhythmic.genes <- read.table(file="tables/sd.dd.rhythmic.table.tsv", sep="\t")$x
-circacompare.sd.dd <- matrix(nrow=length(complete.sd.dd.rhythmic.genes),ncol=15)
+circacompare.sd.dd <- matrix(nrow=length(complete.sd.dd.rhythmic.genes),ncol=21)
 rownames(circacompare.sd.dd) <- complete.sd.dd.rhythmic.genes
 
 for(i in 1:length(complete.sd.dd.rhythmic.genes))
@@ -1051,7 +1175,9 @@ for(i in 1:length(complete.sd.dd.rhythmic.genes))
     
     out.i <- circacompare(x = sd.dd.df, col_time = "time", col_group = "group",
                           col_outcome = "measure",alpha_threshold = 1)
-    circacompare.sd.dd[i,] <- out.i[[2]][,2]
+    #circacompare.sd.dd[i,] <- out.i[[2]][,2]
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    circacompare.sd.dd[i,] <- c(out.i[[2]][,2], error.i)
   }
   else
   {
@@ -1060,8 +1186,11 @@ for(i in 1:length(complete.sd.dd.rhythmic.genes))
   
 }
 
-colnames(circacompare.sd.dd) <- out.i[[2]][,1]
-write.table(circacompare.sd.dd,file="tables/estimates_sd_dd.tsv", sep="\t")
+colnames(circacompare.sd.dd) <- c(out.i[[2]][,1], "error_mesor_1", "error_mesor_2",
+                                  "error_amp_1", "error_amp_2", "error_phase_1", 
+                                  "error_phase_2")
+head(circacompare.sd.dd)
+write.table(circacompare.sd.dd,file="tables/estimates_sd_dd_with_errors.tsv", sep="\t")
 
 # Read and analyze circacompare data
 # LD-LL
@@ -1266,6 +1395,10 @@ boxplot(circacompare.sd.ll[,"sd mesor estimate" ],
         outline=F,col=c("red","lightsalmon","red","firebrick4"),names=c("SD-LL","LL", "SD-DD","DD"),cex.axis=2)
 dev.off()
 
+wilcox.test(x = circacompare.sd.ll[,"sd mesor estimate" ],y = circacompare.sd.ll[,"ll mesor estimate" ], alternative = "greater")$p.value
+wilcox.test(x = circacompare.sd.ll[,"sd mesor estimate" ],y = circacompare.sd.dd[,"dd mesor estimate" ], alternative = "g")$p.value
+wilcox.test(x = circacompare.sd.ll[,"ll mesor estimate" ],y = circacompare.sd.dd[,"dd mesor estimate" ], alternative = "g")$p.value
+
 
 # Complete mean per condition
 # Gene expression matrix for samples under light-dark cycles
@@ -1280,14 +1413,66 @@ sd.genes.exp.in.dd <- genes.expression[complete.sd.rhythmic.genes,dd.sd.zt.i]
 mean(ld.genes.exp.in.ld)
 mean(ld.genes.exp.in.ll)
 mean(ld.genes.exp.in.dd)
-wilcox.test(x = ld.genes.exp.in.ld, y = ld.genes.exp.in.ll, alternative = "l")$p.value
+wilcox.test(x = rowMeans(ld.genes.exp.in.ld), y = rowMeans(ld.genes.exp.in.ll), alternative = "g")$p.value # LL lesser
+wilcox.test(x = rowMeans(ld.genes.exp.in.ld),y = rowMeans(ld.genes.exp.in.dd), alternative = "l")$p.value ## DD greater
 
 mean(sd.genes.exp.in.sd)
 mean(sd.genes.exp.in.ll)
 mean(sd.genes.exp.in.dd)
-wilcox.test(x = sd.genes.exp.in.sd,y = sd.genes.exp.in.dd, alternative = "l")$p.value
+wilcox.test(x = rowMeans(sd.genes.exp.in.sd), y = rowMeans(sd.genes.exp.in.ll), alternative = "g")$p.value # LL lesser
+wilcox.test(x = rowMeans(sd.genes.exp.in.sd),y = rowMeans(sd.genes.exp.in.dd), alternative = "l")$p.value ## DD greater
 
-### Effects of light on transitions
+png("boxplot_mesor_sd_ll_dd_4.png", width = 1800, height = 1800, res=300)
+par(lwd=3)
+boxplot(rowMeans(ld.genes.exp.in.ld), rowMeans(ld.genes.exp.in.ll),
+        rowMeans(ld.genes.exp.in.dd), rowMeans(sd.genes.exp.in.sd),
+        rowMeans(sd.genes.exp.in.ll), rowMeans(sd.genes.exp.in.dd),
+        outline=F,col=c("blue", "lightblue", "darkblue","red","lightsalmon","firebrick4"),
+        names=c("LD", "LD -> LL","LD -> DD", "SD","SD -> LL","SD -> DD"),cex.axis=2, las = 2)
+dev.off()
+
+# Mean for rhythmic non-circadian genes in each condition
+complete.ld.ll.rhythmic.genes <- read.table(file="tables/ld.ll.rhythmic.table.tsv", sep="\t")$x
+complete.ld.dd.rhythmic.genes <- read.table(file="tables/ld.dd.rhythmic.table.tsv", sep="\t")$x
+complete.sd.ll.rhythmic.genes <- read.table(file="tables/sd.ll.rhythmic.table.tsv", sep="\t")$x
+complete.sd.dd.rhythmic.genes <- read.table(file="tables/sd.dd.rhythmic.table.tsv", sep="\t")$x
+
+non.circadian.rhythmic.genes.ld <- setdiff(complete.ld.rhythmic.genes, 
+                                          unique(c(complete.ld.ll.rhythmic.genes,complete.ld.dd.rhythmic.genes)))
+
+non.circadian.rhythmic.genes.sd <- setdiff(complete.sd.rhythmic.genes, 
+                                             unique(c(complete.sd.ll.rhythmic.genes,complete.sd.dd.rhythmic.genes)))
+
+ld.genes.exp.in.ld.non.circ <- genes.expression[non.circadian.rhythmic.genes.ld, ld.zt.i]
+ld.genes.exp.in.ll.non.circ <- genes.expression[non.circadian.rhythmic.genes.ld, ll.ld.zt.i]
+ld.genes.exp.in.dd.non.circ <- genes.expression[non.circadian.rhythmic.genes.ld, dd.ld.zt.i]
+
+wilcox.test(x = rowMeans(ld.genes.exp.in.ld.non.circ), 
+            y = rowMeans(ld.genes.exp.in.ll.non.circ), alternative = "g")$p.value # sig
+wilcox.test(x = rowMeans(ld.genes.exp.in.ld.non.circ),
+            y = rowMeans(ld.genes.exp.in.dd.non.circ), alternative = "l")$p.value # sig
+
+sd.genes.exp.in.sd.non.circ <- genes.expression[non.circadian.rhythmic.genes.sd, sd.zt.i]
+sd.genes.exp.in.ll.non.circ <- genes.expression[non.circadian.rhythmic.genes.sd, ll.sd.zt.i]
+sd.genes.exp.in.dd.non.circ <- genes.expression[non.circadian.rhythmic.genes.sd, dd.sd.zt.i]
+
+wilcox.test(x = rowMeans(sd.genes.exp.in.sd.non.circ), 
+            y = rowMeans(sd.genes.exp.in.ll.non.circ), alternative = "g")$p.value # no sig
+wilcox.test(x = rowMeans(sd.genes.exp.in.sd.non.circ),
+            y = rowMeans(sd.genes.exp.in.dd.non.circ), alternative = "l")$p.value # DD greater
+
+
+png("boxplot_expression_non_circadian_genes_by_cond.png", width = 1800, height = 1800, res=200)
+par(lwd=3)
+boxplot(rowMeans(ld.genes.exp.in.ld.non.circ), rowMeans(ld.genes.exp.in.ll.non.circ),
+        rowMeans(ld.genes.exp.in.dd.non.circ), rowMeans(sd.genes.exp.in.sd.non.circ),
+        rowMeans(sd.genes.exp.in.ll.non.circ), rowMeans(sd.genes.exp.in.dd.non.circ),
+        outline=F,col=c("blue", "lightblue", "darkblue","red","lightsalmon","firebrick4"),
+        names=c("LD", "LD -> LL","LD -> DD", "SD","SD -> LL","SD -> DD"),cex.axis=2, las = 2)
+dev.off()
+
+
+################# Effects of light on transitions
 # Effects of light on LD transitions
 complete.ld.rhythmic.genes <- read.table("tables/ld.rhythmic.table.tsv", header = T)$V1
 complete.ld.ll.rhythmic.genes <- read.table(file="tables/ld.ll.rhythmic.table.tsv", sep="\t")$x
@@ -1484,6 +1669,45 @@ write.table(x = sd.light.repressed.dark.activated, file="tables/SD_light_repress
 
 write.table(x = sd.no.clear.effect.light.dark.regulation, file="tables/SD_no_clear_effect_light_dark_regulation.tsv",row.names = F)
 
+
+# Venn diagrams
+library(VennDiagram)
+
+png("response_to_light_ld_sd.png", res=300, width = 1500, height = 1500)
+grid.newpage()
+draw.pairwise.venn(area1 = length(ld.light.activated.dark.repressed), area2 = length(sd.light.activated.dark.repressed),
+                   cross.area = length(intersect(ld.light.activated.dark.repressed,sd.light.activated.dark.repressed)),
+                   lwd = 3,category = c("LD","SD"),euler.d = T,col = c("blue","red"),fill = c("blue","red"),
+                   alpha = 0.3,cex = 2,cat.cex = 2,cat.dist = c(0.035,0.035), cat.pos = c(210,150))
+dev.off()
+
+
+png("response_to_dark_ld_sd.png", res=300, width = 1500, height = 1500)
+grid.newpage()
+draw.pairwise.venn(area1 = length(ld.light.repressed.dark.activated), area2 = length(sd.light.repressed.dark.activated),
+                   cross.area = length(intersect(ld.light.repressed.dark.activated,sd.light.repressed.dark.activated)),
+                   lwd = 3,category = c("LD","SD"),euler.d = T,col = c("blue","red"),fill = c("blue","red"),
+                   alpha = 0.3,cex = 2,cat.cex = 2,cat.dist = c(0.035,0.035), cat.pos = c(210,150))
+dev.off()
+
+png("response_to_dark_ld_response_to_light_sd.png", res=300, width = 1500, height = 1500)
+grid.newpage()
+draw.pairwise.venn(area1 = length(ld.light.repressed.dark.activated), area2 = length(sd.light.activated.dark.repressed),
+                   cross.area = length(intersect(ld.light.repressed.dark.activated,sd.light.activated.dark.repressed)),
+                   lwd = 3,category = c("LD","SD"),euler.d = T,col = c("blue","red"),fill = c("blue","red"),
+                   alpha = 0.3,cex = 2,cat.cex = 2,cat.dist = c(0.035,0.035), cat.pos = c(210,150))
+dev.off()
+
+png("response_to_dark_sd_response_to_light_ld.png", res=300, width = 1500, height = 1500)
+grid.newpage()
+draw.pairwise.venn(area1 = length(ld.light.activated.dark.repressed), area2 = length(sd.light.repressed.dark.activated),
+                   cross.area = length(intersect(ld.light.activated.dark.repressed,sd.light.repressed.dark.activated)),
+                   lwd = 3,category = c("LD","SD"),euler.d = T,col = c("blue","red"),fill = c("blue","red"),
+                   alpha = 0.3,cex = 2,cat.cex = 2,cat.dist = c(0.035,0.035), cat.pos = c(210,150))
+dev.off()
+
+
+
 # Circacompare for LD-SD differences
 # Rhythmic genes in LD and SD 
 complete.sd.rhythmic.genes <- read.table("tables/sd.rhythmic.table.tsv", header = T)$V1
@@ -1577,7 +1801,7 @@ mean(circacompare.ld.sd[,"ld peak time hours" ])-mean(circacompare.ld.sd[,"sd pe
 median(circacompare.ld.sd[,"ld peak time hours" ])-median(circacompare.ld.sd[,"sd peak time hours" ])
 
 # This should be circular
-source("../../../PSEA_R/GeneSCARAB/PSEA_functions_package.R")
+source("../../../GeneSCARAB/PSEA_functions_package.R")
 library(circular)
 custom_set <- list(circacompare.ld.sd[,"ld peak time hours" ],
                    circacompare.ld.sd[,"sd peak time hours" ]) # Load vector of phases
@@ -1633,9 +1857,178 @@ axis(side = 2,lwd=3,cex.axis=1.3,las=2)
 #abline(v=8, col="black", lwd=5, lty = 2)
 dev.off()
 
+
+
+# Histograms for non-circadian genes (only the ones in intersect, to explain the diel histograms)
+library(data.table)
+circacompare.ld.sd <- as.data.frame(fread("tables/circacompare_intersection.tsv", sep="\t"))
+circacompare.ld.sd.names <- circacompare.ld.sd$V1
+circacompare.ld.sd <- circacompare.ld.sd[,-1]
+rownames(circacompare.ld.sd) <- circacompare.ld.sd.names
+
+rhythmic.only.ld
+rhythmic.only.sd
+
+png("hist_phase_ld_intersection_non_circadian.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(circacompare.ld.sd[rhythmic.only.ld,"ld peak time hours" ],col="blue",
+     ylim=c(0,800),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="")
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+#abline(v=16, col="black", lwd=5, lty = 2)
+dev.off()
+
+png("hist_phase_sd_intersection_non_circadian.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(circacompare.ld.sd[rhythmic.only.sd,"sd peak time hours" ],col="red",
+     ylim=c(0,1000),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="")
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+#abline(v=16, col="black", lwd=5, lty = 2)
+dev.off()
+
+# Histograms for circadian genes in light/dark cycles (only the ones in intersect, to explain the diel histograms)
+png("hist_phase_ld_ll_in_cycle.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(circacompare.ld.sd[unique(c(rhythmic.genes.ld.ll.24, 
+                                 rhythmic.genes.ld.ll.12)),"ld peak time hours" ],col="blue",
+     ylim=c(0,300),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="")
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+#abline(v=16, col="black", lwd=5, lty = 2)
+dev.off()
+
+png("hist_phase_ld_dd_in_cycle.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(circacompare.ld.sd[unique(c(rhythmic.genes.ld.dd.24, 
+                                 rhythmic.genes.ld.dd.12)),"ld peak time hours" ],col="blue",
+     ylim=c(0,300),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="")
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+#abline(v=16, col="black", lwd=5, lty = 2)
+dev.off()
+
+png("hist_phase_sd_ll_in_cycle.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(circacompare.ld.sd[unique(c(rhythmic.genes.sd.ll.24, 
+                                 rhythmic.genes.sd.ll.12)),"sd peak time hours" ],col="red",
+     ylim=c(0,300),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="")
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+#abline(v=16, col="black", lwd=5, lty = 2)
+dev.off()
+
+png("hist_phase_sd_dd_in_cycle.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(circacompare.ld.sd[unique(c(rhythmic.genes.sd.dd.24, 
+                                 rhythmic.genes.sd.dd.12)),"ld peak time hours" ],col="red",
+     ylim=c(0,300),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="")
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+#abline(v=16, col="black", lwd=5, lty = 2)
+dev.off()
+
+
+
+# Histograms for bona fide genes
+bona_fide <- intersect(rhythmic.ld.ll.dd,rhythmic.sd.ll.dd)
+
+png("hist_bona_fide_ld.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(circacompare.ld.sd[bona_fide,"ld peak time hours" ],col="blue",
+     ylim=c(0,20),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="", breaks = seq(0,24,2))
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+#abline(v=16, col="black", lwd=5, lty = 2)
+dev.off()
+
+png("hist_bona_fide_ld_ll.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(results.ld.ll.24[bona_fide,"peak_time_hours" ],col="lightblue",
+     ylim=c(0,20),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="", breaks = seq(0,24,2))
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+#abline(v=16, col="black", lwd=5, lty = 2)
+dev.off()
+
+png("hist_bona_fide_ld_dd.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(results.ld.dd.24[bona_fide,"peak_time_hours" ],col="darkblue",
+     ylim=c(0,20),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="", breaks = seq(0,24,2))
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+#abline(v=16, col="black", lwd=5, lty = 2)
+dev.off()
+
+png("hist_bona_fide_sd.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(circacompare.ld.sd[bona_fide,"sd peak time hours" ],col="red",
+     ylim=c(0,20),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="", breaks = seq(0,24,2))
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+#abline(v=16, col="black", lwd=5, lty = 2)
+dev.off()
+
+png("hist_bona_fide_sd_ll.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(results.sd.ll.24[bona_fide,"peak_time_hours" ],col="lightsalmon",
+     ylim=c(0,20),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="", breaks = seq(0,24,2))
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+#abline(v=16, col="black", lwd=5, lty = 2)
+dev.off()
+
+png("hist_bona_fide_sd_dd.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(results.sd.dd.24[bona_fide,"peak_time_hours" ],col="firebrick4",
+     ylim=c(0,20),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="", breaks = seq(0,24,2))
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+#abline(v=16, col="black", lwd=5, lty = 2)
+dev.off()
+
+
+# Histograms for light and dark-regulated genes
+ld.light.activated.dark.repressed <- read.table("tables/LD_light_activated_dark_repressed.tsv", sep="\t", 
+                                                header = T)$x
+ld.light.repressed.dark.activated <- read.table("tables/LD_light_repressed_dark_activated.tsv", sep="\t", 
+                                                header = T)$x
+sd.light.activated.dark.repressed <- read.table("tables/SD_light_activated_dark_repressed.tsv", sep="\t", 
+                                                header = T)$x
+sd.light.repressed.dark.activated <- read.table("tables/SD_light_repressed_dark_activated.tsv", sep="\t", 
+                                                header = T)$x
+
+
+
+png("hist_light_act_dark_rep_ld.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(circacompare.ld.sd[ld.light.activated.dark.repressed,"ld peak time hours" ],col="blue",
+     ylim=c(0,250),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="", breaks = seq(0,24,2))
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+#abline(v=16, col="black", lwd=5, lty = 2)
+dev.off()
+
+png("hist_light_rep_dark_act_ld.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(circacompare.ld.sd[ld.light.repressed.dark.activated,"ld peak time hours" ],col="blue",
+     ylim=c(0,250),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="", breaks = seq(0,24,2))
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+#abline(v=16, col="black", lwd=5, lty = 2)
+dev.off()
+
+png("hist_light_act_dark_rep_sd.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(circacompare.ld.sd[sd.light.activated.dark.repressed,"sd peak time hours" ],col="red",
+     ylim=c(0,250),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="", breaks = seq(0,24,2))
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+#abline(v=16, col="black", lwd=5, lty = 2)
+dev.off()
+
+png("hist_light_rep_dark_act_sd.png", width = 1500, height = 1500, res=300)
+par(lwd=3)
+hist(circacompare.ld.sd[sd.light.repressed.dark.activated,"sd peak time hours" ],col="red",
+     ylim=c(0,250),xlim=c(0,24),main="",axes=FALSE,xlab="",ylab="", breaks = seq(0,24,2))
+axis(side = 2,lwd=3,cex.axis=1.3,las=2)
+#abline(v=16, col="black", lwd=5, lty = 2)
+dev.off()
+
+
+
+
+
 ###### Functional analysis
 # Using GeneSCARAB
 # First, load annotation and phases information for LD and SD
+source("../../../GeneSCARAB/PSEA_functions_package.R")
+library(circular)
 circa_table_genescarab <- read.table("tables/circacompare_intersection.tsv", header = T, sep = "\t")
 total_phases_table_ld <- data.frame(names=rownames(circa_table_genescarab), phase=as.numeric(circa_table_genescarab[["ld.peak.time.hours"]]))
 total_phases_table_sd <- data.frame(names=rownames(circa_table_genescarab), phase=as.numeric(circa_table_genescarab[["sd.peak.time.hours"]]))
@@ -1694,15 +2087,26 @@ sum(go.circa.table.sd$hr_p_value_adj < 0.05, na.rm = T) # 1923
 sum(go.circa.table.ld$rao_p_value_adj < 0.05, na.rm = T) # 0
 sum(go.circa.table.sd$rao_p_value_adj < 0.05, na.rm = T) # 1
 
-rownames(go.circa.table.sd)[which(go.circa.table.sd$rao_p_value_adj < 0.05)]
+# HR positive results may be due to low number of associated genes
+sum(go.circa.table.ld[go.circa.table.ld$n > 3,]$hr_p_value_adj < 0.05 | go.circa.table.ld[go.circa.table.ld$n > 3,]$rao_p_value_adj < 0.05, na.rm = T) #18
+sum(go.circa.table.sd[go.circa.table.sd$n > 3,]$hr_p_value_adj < 0.05 | go.circa.table.sd[go.circa.table.sd$n > 3,]$rao_p_value_adj < 0.05, na.rm = T) #22
+
+go.circa.table.sd[which(go.circa.table.sd$rao_p_value_adj < 0.05),]
 plot(circular(phases.list.sd$`GO:0051253`$phase)) # avoid night
 
 
 unimod_ld <- rownames(go.circa.table.ld)[which(go.circa.table.ld$rayleigh_p_value_adj < 0.05 | go.circa.table.ld$kuiper_p_value_adj < 0.05)]
 unimod_sd <- rownames(go.circa.table.sd)[which(go.circa.table.sd$rayleigh_p_value_adj < 0.05 | go.circa.table.sd$kuiper_p_value_adj < 0.05)]
 
-multimod_ld <- rownames(go.circa.table.ld)[which(go.circa.table.ld$hr_p_value_adj < 0.05 | go.circa.table.ld$rao_p_value_adj < 0.05)]
-multimod_sd <- rownames(go.circa.table.sd)[which(go.circa.table.sd$hr_p_value_adj < 0.05 | go.circa.table.sd$rao_p_value_adj < 0.05)]
+multimod_ld <- rownames(go.circa.table.ld[go.circa.table.ld$n > 3,])[which(go.circa.table.ld[go.circa.table.ld$n > 3,]$hr_p_value_adj < 0.05 | go.circa.table.ld[go.circa.table.ld$n > 3,]$rao_p_value_adj < 0.05)]
+multimod_sd <- rownames(go.circa.table.sd[go.circa.table.sd$n > 3,])[which(go.circa.table.sd[go.circa.table.sd$n > 3,]$hr_p_value_adj < 0.05 | go.circa.table.sd[go.circa.table.sd$n > 3,]$rao_p_value_adj < 0.05)]
+
+
+write.table(unimod_ld, "tables/gos_ld_unimodal.tsv", sep = "\t", row.names = F)
+write.table(unimod_sd, "tables/gos_sd_unimodal.tsv", sep = "\t", row.names = F)
+write.table(multimod_ld, "tables/gos_ld_multimodal.tsv", sep = "\t", row.names = F)
+write.table(multimod_sd, "tables/gos_sd_multimodal.tsv", sep = "\t", row.names = F)
+
 
 library(VennDiagram)
 png("ld_sd_unimod_go.png", res=300, width = 1500, height = 1500)
@@ -1721,24 +2125,38 @@ draw.pairwise.venn(area1 = length(multimod_ld), area2 = length(multimod_sd),
                    alpha = 0.3,cex = 2,cat.cex = 2,cat.dist = c(0.035,0.035), cat.pos = c(210,150))
 dev.off()
 
+# Some examples
+# DNA replication
+plot(circular(phases.list.sd$`GO:0006261`$phase))
+plot(circular(phases.list.ld$`GO:0006261`$phase))
+
+
+# Check if there exist modality changes between GOs
+intersect(unimod_ld, multimod_sd)
+intersect(unimod_sd, multimod_ld)
+plot(circular(phases.list.ld$`GO:0005247`$phase))
+
 # For the GO terms not following an uniform distribution, test them against the general distribution of phases
 # per photoperiod
 non_uniform_gos_ld <- unique(c(unimod_ld, multimod_ld))
+non_uniform_gos_ld <- non_uniform_gos_ld[non_uniform_gos_ld %in% names(phases.list.ld.clean)]
 phases.list.ld.non.uni <- phases.list.ld.clean[non_uniform_gos_ld]
+
 gen.dist.ld <- test_against_gen_dist(phase.list = phases.list.ld.non.uni, total.phase.table = total_phases_table_ld)
-write.table(gen.dist.ld,file="tables/go_general_dist_ld.tsv", sep="\t")
+write.table(gen.dist.ld,file="tables/go_general_dist_ld_filtered.tsv", sep="\t")
 
 non_uniform_gos_sd <- unique(c(unimod_sd, multimod_sd))
+non_uniform_gos_sd <- non_uniform_gos_sd[non_uniform_gos_sd %in% names(phases.list.sd.clean)]
 phases.list.sd.non.uni <- phases.list.sd.clean[non_uniform_gos_sd]
 gen.dist.sd <- test_against_gen_dist(phase.list = phases.list.sd.non.uni, total.phase.table = total_phases_table_sd)
-write.table(gen.dist.sd,file="tables/go_general_dist_sd.tsv", sep="\t")
+write.table(gen.dist.sd,file="tables/go_general_dist_sd_filtered.tsv", sep="\t")
 
-gen.dist.ld <- read.table("tables/go_general_dist_ld.tsv", sep="\t", header = T)
-gen.dist.sd <- read.table("tables/go_general_dist_sd.tsv", sep="\t", header = T)
+gen.dist.ld <- read.table("tables/go_general_dist_ld_filtered.tsv", sep="\t", header = T)
+gen.dist.sd <- read.table("tables/go_general_dist_sd_filtered.tsv", sep="\t", header = T)
 
-sum(gen.dist.ld$gen_dist_p_value_adj < 0.05) # 357 non-uniform GO terms present a different distribution than that of global
+sum(gen.dist.ld$gen_dist_p_value_adj < 0.05) # 451 non-uniform GO terms present a different distribution than that of global
 # mRNA accumulation in LD
-sum(gen.dist.sd$gen_dist_p_value_adj < 0.05) # 197 non-uniform GO terms present a different distribution than that of global
+sum(gen.dist.sd$gen_dist_p_value_adj < 0.05) # 256 non-uniform GO terms present a different distribution than that of global
 # mRNA accumulation in SD
 
 go_dist_gen_ld <- rownames(gen.dist.ld)[which(gen.dist.ld$gen_dist_p_value_adj < 0.05)]
@@ -1751,6 +2169,28 @@ draw.pairwise.venn(area1 = length(go_dist_gen_ld), area2 = length(go_dist_gen_sd
                    lwd = 3,category = c("LD","SD"),euler.d = T,col = c("blue","red"),fill = c("blue","red"),
                    alpha = 0.3,cex = 2,cat.cex = 2,cat.dist = c(0.035,0.035), cat.pos = c(210,150))
 dev.off()
+
+write.table(go_dist_gen_ld, "tables/go_diff_general_ld.tsv", sep = "\t", row.names = F)
+write.table(go_dist_gen_sd, "tables/go_diff_general_sd.tsv", sep = "\t", row.names = F)
+
+# Add description of non-experimental distributed GOs
+GO_complete_list <- as.list(GOTERM)
+
+go_dist_gen_ld <- go_dist_gen_ld[go_dist_gen_ld %in% names(GO_complete_list)]
+go_dist_gen_ld_description <- sapply(go_dist_gen_ld, function(x) GO_complete_list[[x]]@Term)
+go_dist_gen_ld_df <- data.frame(go=names(go_dist_gen_ld_description), description=go_dist_gen_ld_description)
+write.table(go_dist_gen_ld_df,file="tables/go_general_dist_ld_filt_description.tsv", sep="\t", col.names = T)
+
+go_dist_gen_sd <- go_dist_gen_sd[go_dist_gen_sd %in% names(GO_complete_list)]
+go_dist_gen_sd_description <- sapply(go_dist_gen_sd, function(x) GO_complete_list[[x]]@Term)
+go_dist_gen_sd_df <- data.frame(go=names(go_dist_gen_sd_description), description=go_dist_gen_sd_description)
+write.table(go_dist_gen_sd_df,file="tables/go_general_dist_sd_filt_description.tsv", sep="\t", col.names = T)
+
+shared_non_exp_dist <- intersect(go_dist_gen_ld, go_dist_gen_sd)
+go_dist_gen_ld_sd_description <- sapply(shared_non_exp_dist, function(x) GO_complete_list[[x]]@Term)
+go_dist_gen_sd_df <- data.frame(go=names(go_dist_gen_ld_sd_description), description=go_dist_gen_ld_sd_description)
+write.table(go_dist_gen_sd_df,file="tables/go_general_dist_ld_sd_filt_description.tsv", sep="\t", col.names = T, row.names = F)
+
 
 # Test shared GO terms not following an uniform distribution for differences by photoperiod
 shared_non_uniform <- intersect(non_uniform_gos_ld, non_uniform_gos_sd)
@@ -1768,18 +2208,18 @@ go_diff_ld_sd_clean_bh <- p.adjust(unlist(go_diff_ld_sd_clean), method = "BH")
 go_diff_ld_sd_table <- data.frame(gen_dist_p_value=unlist(go_diff_ld_sd_clean), 
                              gen_dist_p_value_adj=go_diff_ld_sd_clean_bh)
 
-write.table(go_diff_ld_sd_table,file="tables/go_diff_ld_sd_table", sep="\t")
+write.table(go_diff_ld_sd_table,file="tables/go_diff_ld_sd_table_filtered", sep="\t")
 
-go_diff_ld_sd_table <- read.table("tables/go_diff_ld_sd_table", sep="\t", header = T)
+go_diff_ld_sd_table <- read.table("tables/go_diff_ld_sd_table_filtered", sep="\t", header = T)
 
-sum(go_diff_ld_sd_table$gen_dist_p_value_adj < 0.05) # 573 change their distribution between LD and SD
+sum(go_diff_ld_sd_table$gen_dist_p_value_adj < 0.05) # 525 change their distribution between LD and SD
 change_gos <- rownames(go_diff_ld_sd_table)[which(go_diff_ld_sd_table$gen_dist_p_value_adj < 0.05)]
 
 # Difference in medians for changing GOs
 diff_gos_medians <- go.circa.table.ld[change_gos,"median"] - go.circa.table.sd[change_gos,"median"]
 
 sd_anticipated <- change_gos[which((0 < diff_gos_medians & diff_gos_medians < 12) | (diff_gos_medians < -12))]
-# 572 are anticipated in SD, only 1 in LD
+# 524 are anticipated in SD, only 1 in LD
 length(sd_anticipated)
 ld_anticipated <- setdiff(change_gos, sd_anticipated)
 
@@ -1807,6 +2247,8 @@ circular_boxplot(circ_ex_sd_big, "prueba_gos_sd_big3.png", color.palette = "Tam"
 
 # Description of changing GO terms
 GO_complete_list <- as.list(GOTERM)
+
+change_gos <- change_gos[change_gos %in% names(GO_complete_list)]
 change_gos_description <- sapply(change_gos, function(x) GO_complete_list[[x]]@Term)
   
 # Determine which ones correspond to BP, MF and CC
@@ -1829,9 +2271,9 @@ change_gos_cc_table <- data.frame(go=names(change_gos_description_cc), descripti
                                   ld_phase=go.circa.table.ld[names(change_gos_description_cc), "median"],
                                   sd_phase=go.circa.table.sd[names(change_gos_description_cc), "median"])
 
-write.table(change_gos_bp_table,file="tables/anticipated_gos_sd_bp.tsv", sep="\t", col.names = T)
-write.table(change_gos_mf_table,file="tables/anticipated_gos_sd_mf.tsv", sep="\t", col.names = T)
-write.table(change_gos_cc_table,file="tables/anticipated_gos_sd_cc.tsv", sep="\t", col.names = T)
+write.table(change_gos_bp_table,file="tables/anticipated_gos_sd_bp_filt.tsv", sep="\t", col.names = T)
+write.table(change_gos_mf_table,file="tables/anticipated_gos_sd_mf_filt.tsv", sep="\t", col.names = T)
+write.table(change_gos_cc_table,file="tables/anticipated_gos_sd_cc_filt.tsv", sep="\t", col.names = T)
 
 
 ### kegg Analysis
@@ -1889,7 +2331,7 @@ id_column = "GID"
 }
 
 # Filter out pathways not present in plants
-kegg_plants <- read.csv("../../../PSEA_R/GeneSCARAB/pathways_plants.txt", sep = "\t", header = T)$x
+kegg_plants <- read.csv("../../../GeneSCARAB/pathways_plants.txt", sep = "\t", header = T)$x
 kegg_plants <- paste0("map", sapply(strsplit(kegg_plants, "ko"), function(x) x[[2]]))
 
 ko_list <- ko_list[names(ko_list) %in% kegg_plants]
@@ -1939,11 +2381,22 @@ sum(kegg.circa.table.sd$hr_p_value_adj < 0.05, na.rm = T) # 2
 sum(kegg.circa.table.ld$rao_p_value_adj < 0.05, na.rm = T) # 0
 sum(kegg.circa.table.sd$rao_p_value_adj < 0.05, na.rm = T) # 0
 
+# HR positive results may be due to low number of associated genes
+sum(kegg.circa.table.ld[kegg.circa.table.ld$n > 2,]$hr_p_value_adj < 0.05, na.rm = T) #0
+sum(kegg.circa.table.sd[kegg.circa.table.sd$n > 2,]$hr_p_value_adj < 0.05, na.rm = T) #0
+
 unimod_ld <- rownames(kegg.circa.table.ld)[which(kegg.circa.table.ld$rayleigh_p_value_adj < 0.05 | kegg.circa.table.ld$kuiper_p_value_adj < 0.05)]
 unimod_sd <- rownames(kegg.circa.table.sd)[which(kegg.circa.table.sd$rayleigh_p_value_adj < 0.05 | kegg.circa.table.sd$kuiper_p_value_adj < 0.05)]
 
 multimod_ld <- rownames(kegg.circa.table.ld)[which(kegg.circa.table.ld$hr_p_value_adj < 0.05 | kegg.circa.table.ld$rao_p_value_adj < 0.05)]
 multimod_sd <- rownames(kegg.circa.table.sd)[which(kegg.circa.table.sd$hr_p_value_adj < 0.05 | kegg.circa.table.sd$rao_p_value_adj < 0.05)]
+
+kegg.circa.table.ld[multimod_ld,] # only one data point
+kegg.circa.table.sd[multimod_sd,] # only one data point
+# No significant multimodal pathways
+
+write.table(unimod_ld, "tables/kegg_ld_unimodal.tsv", sep = "\t", row.names = F)
+write.table(unimod_sd, "tables/kegg_sd_unimodal.tsv", sep = "\t", row.names = F)
 
 library(VennDiagram)
 png("ld_sd_unimod_kegg.png", res=300, width = 1500, height = 1500)
@@ -1954,17 +2407,17 @@ draw.pairwise.venn(area1 = length(unimod_ld), area2 = length(unimod_sd),
                    alpha = 0.3,cex = 2,cat.cex = 2,cat.dist = c(0.035,0.035), cat.pos = c(210,150))
 dev.off()
 
-png("ld_sd_multimod_kegg.png", res=300, width = 1500, height = 1500)
-grid.newpage()
-draw.pairwise.venn(area1 = length(multimod_ld), area2 = length(multimod_sd),
-                   cross.area = length(intersect(multimod_ld,multimod_sd)),
-                   lwd = 3,catekeggry = c("LD","SD"),euler.d = T,col = c("blue","red"),fill = c("blue","red"),
-                   alpha = 0.3,cex = 2,cat.cex = 2,cat.dist = c(0.035,0.035), cat.pos = c(210,150))
-dev.off()
+# png("ld_sd_multimod_kegg.png", res=300, width = 1500, height = 1500)
+# grid.newpage()
+# draw.pairwise.venn(area1 = length(multimod_ld), area2 = length(multimod_sd),
+#                    cross.area = length(intersect(multimod_ld,multimod_sd)),
+#                    lwd = 3,catekeggry = c("LD","SD"),euler.d = T,col = c("blue","red"),fill = c("blue","red"),
+#                    alpha = 0.3,cex = 2,cat.cex = 2,cat.dist = c(0.035,0.035), cat.pos = c(210,150))
+# dev.off()
 
 # For the kegg terms not following an uniform distribution, test them against the general distribution of phases
 # per photoperiod
-non_uniform_keggs_ld <- unique(c(unimod_ld, multimod_ld))
+non_uniform_keggs_ld <- unique(c(unimod_ld)) #no significant
 phases.list.ld.non.uni <- phases.list.ld.clean[non_uniform_keggs_ld]
 gen.dist.ld <- test_against_gen_dist(phase.list = phases.list.ld.non.uni, total.phase.table = total_phases_table_ld)
 write.table(gen.dist.ld,file="tables/kegg_general_dist_ld.tsv", sep="\t")
@@ -1985,6 +2438,9 @@ sum(gen.dist.sd$gen_dist_p_value_adj < 0.05) # 21 non-uniform pathways present a
 kegg_dist_gen_ld <- rownames(gen.dist.ld)[which(gen.dist.ld$gen_dist_p_value_adj < 0.05)]
 kegg_dist_gen_sd <- rownames(gen.dist.sd)[which(gen.dist.sd$gen_dist_p_value_adj < 0.05)]
 
+write.table(kegg_dist_gen_ld, "tables/kegg_general_dist_ld.tsv", sep = "\t", row.names = F)
+write.table(kegg_dist_gen_sd, "tables/kegg_general_dist_sd.tsv", sep = "\t", row.names = F)
+
 png("ld_sd_general_dist_kegg.png", res=300, width = 1500, height = 1500)
 grid.newpage()
 draw.pairwise.venn(area1 = length(kegg_dist_gen_ld), area2 = length(kegg_dist_gen_sd),
@@ -2000,9 +2456,9 @@ phases.list.shared.sd.non.uni <- phases.list.sd.non.uni[shared_non_uniform]
 
 kegg_diff_ld_sd_table <- test_two_dist(phases.list.shared.ld.non.uni, phases.list.shared.sd.non.uni)
 
-write.table(kegg_diff_ld_sd_table,file="tables/kegg_diff_ld_sd_table", sep="\t")
+write.table(kegg_diff_ld_sd_table,file="tables/kegg_diff_ld_sd_table.tsv", sep="\t")
 
-kegg_diff_ld_sd_table <- read.table("tables/kegg_diff_ld_sd_table", sep="\t", header = T)
+kegg_diff_ld_sd_table <- read.table("tables/kegg_diff_ld_sd_table.tsv", sep="\t", header = T)
 
 sum(kegg_diff_ld_sd_table$gen_dist_p_value_adj < 0.05) # 27 change their distribution between LD and SD
 change_keggs <- rownames(kegg_diff_ld_sd_table)[which(kegg_diff_ld_sd_table$gen_dist_p_value_adj < 0.05)]
@@ -2012,7 +2468,7 @@ diff_keggs_medians <- kegg.circa.table.ld[change_keggs,"median"] - kegg.circa.ta
 
 sd_anticipated <- change_keggs[which((0 < diff_keggs_medians & diff_keggs_medians < 12) | (diff_keggs_medians < -12))]
 length(sd_anticipated)
-# All changing keggs are anticipated in SD
+# All 27 changing keggs are anticipated in SD
 
 library(circlize)
 library(ComplexHeatmap)
@@ -2065,8 +2521,35 @@ kegg_dist_gen_ld[!(kegg_dist_gen_ld %in% change_keggs)]
 kegg_dist_gen_sd[!(kegg_dist_gen_sd %in% change_keggs)]
 
 
+# Select some pathways to plot, non-uniform and SD-anticipated
+# Photosynthesis, Photosynthesis - antenna proteins, Carbon fixation by Calvin cycle,
+# Spliceosome, RNA degradation, Motor proteins, Endocytosis, Ribosome,
+# Protein processing in endoplasmic reticulum, Proteasome, Plant hormone signal transduction
 
-## Functional enrichment of free-running conditions
+# Same order:
+# map00195, map00196, map00710, map03040, map03018, map04814, map04144, map03010, 
+# map04141, map03050, map04075
+library(circlize)
+library(ComplexHeatmap)
+library(MetBrewer)
+
+selected_kegg_ld <- kegg.circa.table.ld[c("map00195", "map00196", "map00710", "map03040",
+                                          "map03018", "map04814", "map04144", "map03010", 
+                                          "map04141", "map03050", "map04075"),]
+
+selected_kegg_sd <- kegg.circa.table.sd[c("map00195", "map00196", "map00710", "map03040",
+                                          "map03018", "map04814", "map04144", "map03010", 
+                                          "map04141", "map03050", "map04075"),]
+
+circular_boxplot(selected_kegg_ld, "selected_keggs_ld.png", color.palette = "Tam",
+                 tr.height = 0.075)
+circular_boxplot(selected_kegg_sd, "selected_keggs_sd.png", color.palette = "Tam",
+                 tr.height = 0.075)
+
+
+
+
+##################  Functional enrichment of free-running conditions  ##########################
 complete.ld.ll.rhythmic.genes <- read.table(file="tables/ld.ll.rhythmic.table.tsv", sep="\t",header = T)$x
 complete.ld.dd.rhythmic.genes <- read.table(file="tables/ld.dd.rhythmic.table.tsv", sep="\t",header = T)$x
 complete.sd.ll.rhythmic.genes <- read.table(file="tables/sd.ll.rhythmic.table.tsv", sep="\t",header = T)$x
@@ -2082,12 +2565,13 @@ complete.sd.rhythmic.genes <- read.table(file="tables/sd.rhythmic.table.tsv",hea
 
 # For each one
 library(clusterProfiler)
+library(enrichplot)
 library("org.Mpolymorpha71.eg.db")
 universe_set <- unique(c(complete.ld.rhythmic.genes, complete.sd.rhythmic.genes))
 
 ego.inter.ll <- enrichGO(gene = inter_ll,
                          OrgDb = org.Mpolymorpha71.eg.db,
-                         universe = universe_set,
+                         #universe = universe_set,
                          ont           = "BP",
                          pAdjustMethod = "BH",
                          pvalueCutoff  = 0.05,
@@ -2095,13 +2579,20 @@ ego.inter.ll <- enrichGO(gene = inter_ll,
                          readable      = F,
                          keyType = "GID")
 
-barplot(ego.inter.ll, showCategory = 20)
+barplot(ego.inter.ll, showCategory = 30)
+
+png("ego_inter_ll_no_universe.png", res=200, width = 1700, height = 1700)
+emapplot(pairwise_termsim(ego.inter.ll))
+dev.off()
+
+treeplot(pairwise_termsim(ego.inter.ll))
+
 ego.inter.ll.df <- as.data.frame(ego.inter.ll)
 
 ego.inter.dd <- enrichGO(gene = inter_dd,
                          OrgDb         = org.Mpolymorpha71.eg.db,
-                         universe = universe_set,
-                         ont           = "BP",
+                         #universe = universe_set,
+                         ont           = "ALL",
                          pAdjustMethod = "BH",
                          pvalueCutoff  = 0.05,
                          qvalueCutoff  = 0.05,
@@ -2110,7 +2601,7 @@ ego.inter.dd <- enrichGO(gene = inter_dd,
 
 ego.union.ll <- enrichGO(gene = union_ll,
                          OrgDb         = org.Mpolymorpha71.eg.db,
-                         universe = universe_set,
+                         #universe = universe_set,
                          ont           = "BP",
                          pAdjustMethod = "BH",
                          pvalueCutoff  = 0.05,
@@ -2119,18 +2610,25 @@ ego.union.ll <- enrichGO(gene = union_ll,
                          keyType = "GID")
 
 barplot(ego.union.ll, showCategory = 20)
+png("ego_union_ll.png", res=200, width = 1700, height = 1700)
+emapplot(pairwise_termsim(ego.union.ll))
+dev.off()
+treeplot(pairwise_termsim(ego.union.ll))
 ego.union.ll.df <- as.data.frame(ego.union.ll)
 
 ego.union.dd <- enrichGO(gene = union_dd,
                          OrgDb         = org.Mpolymorpha71.eg.db,
-                         ont           = "BP",
+                         #universe = universe_set,
+                         ont           = "ALL",
                          pAdjustMethod = "BH",
                          pvalueCutoff  = 0.05,
                          qvalueCutoff  = 0.05,
                          readable      = F,
                          keyType = "GID")
+
+png("ego_union_dd_no_universe.png", res=200, width = 1800, height = 1200)
 barplot(ego.union.dd, showCategory = 20)
-ego.inter.ll.df <- as.data.frame(ego.inter.ll)
+dev.off()
 
 # Functional annotation of bona_fide genes
 complete.sd.dd.rhythmic.genes <- read.table("tables/sd.dd.rhythmic.table.tsv", sep="\t")$x
@@ -2144,8 +2642,8 @@ bona_fide <- intersect(complete.ld.ll.dd, complete.sd.ll.dd)
 
 ego.bona.fide <- enrichGO(gene = bona_fide,
                          OrgDb = org.Mpolymorpha71.eg.db,
-                         universe = universe_set,
-                         ont           = "BP",
+                         #universe = universe_set,
+                         ont           = "ALL",
                          pAdjustMethod = "BH",
                          pvalueCutoff  = 0.05,
                          qvalueCutoff  = 0.05,
@@ -2154,12 +2652,90 @@ ego.bona.fide <- enrichGO(gene = bona_fide,
 
 barplot(ego.bona.fide, showCategory = 20)
 
+png("ego_bona_fide.png", res=300, width = 1700, height = 1700)
+emapplot(pairwise_termsim(ego.bona.fide))
+dev.off()
+
+png("ego_bona_fide_tree.png", res=300, width = 3500, height = 1700)
+treeplot(pairwise_termsim(ego.bona.fide), cluster.params = list(n = 2))
+dev.off()
+
+# LL LD-specific, not bona fide
+ll.ld.specific <- setdiff(complete.ld.ll.rhythmic.genes, complete.sd.ll.rhythmic.genes)
+ego.ll.ld.specific <- enrichGO(gene = ll.ld.specific,
+                                 OrgDb = org.Mpolymorpha71.eg.db,
+                                 universe = universe_set,
+                                 ont           = "BP",
+                                 pAdjustMethod = "BH",
+                                 pvalueCutoff  = 0.05,
+                                 qvalueCutoff  = 0.05,
+                                 readable      = F,
+                                 keyType = "GID")
+
+barplot(ego.ll.ld.specific, showCategory = 20)
+
+png("ego_ll_ld_specific.png", res=200, width = 1700, height = 1700)
+emapplot(pairwise_termsim(ego.ll.ld.specific))
+dev.off()
+
+write.table(as.data.frame(ego.ll.ld.specific), "tables/ld_ll_specific_gos.tsv", sep = "\t", row.names = F)
+
+# LL SD-specific, not bona fide
+ll.sd.specific <- setdiff(complete.sd.ll.rhythmic.genes, complete.ld.ll.rhythmic.genes)
+ego.ll.sd.specific <- enrichGO(gene = ll.sd.specific,
+                               OrgDb = org.Mpolymorpha71.eg.db,
+                               universe = universe_set,
+                               ont           = "BP",
+                               pAdjustMethod = "BH",
+                               pvalueCutoff  = 0.05,
+                               qvalueCutoff  = 0.05,
+                               readable      = F,
+                               keyType = "GID")
+
+barplot(ego.ll.sd.specific, showCategory = 20)
+
+png("ego_ll_sd_specific.png", res=200, width = 1700, height = 1700)
+emapplot(pairwise_termsim(ego.ll.sd.specific))
+dev.off()
+
+write.table(as.data.frame(ego.ll.sd.specific), "tables/sd_ll_specific_gos.tsv", sep = "\t", row.names = F)
+
+# DD LD-specific, not bona fide
+dd.ld.specific <- setdiff(complete.ld.dd.rhythmic.genes, complete.sd.dd.rhythmic.genes)
+ego.dd.ld.specific <- enrichGO(gene = dd.ld.specific,
+                               OrgDb = org.Mpolymorpha71.eg.db,
+                               universe = universe_set,
+                               ont           = "BP",
+                               pAdjustMethod = "BH",
+                               pvalueCutoff  = 0.05,
+                               qvalueCutoff  = 0.05,
+                               readable      = F,
+                               keyType = "GID")
+
+barplot(ego.dd.ld.specific, showCategory = 20)
+
+# DD SD-specific, not bona fide
+dd.sd.specific <- setdiff(complete.sd.dd.rhythmic.genes, complete.ld.dd.rhythmic.genes)
+ego.dd.sd.specific <- enrichGO(gene = dd.sd.specific,
+                               OrgDb = org.Mpolymorpha71.eg.db,
+                               universe = universe_set,
+                               ont           = "BP",
+                               pAdjustMethod = "BH",
+                               pvalueCutoff  = 0.05,
+                               qvalueCutoff  = 0.05,
+                               readable      = F,
+                               keyType = "GID")
+
+barplot(ego.dd.sd.specific, showCategory = 20)
+
+
+
 # LL-DD LD-specific, not bona fide
 free.ld.specific <- setdiff(complete.ld.ll.dd, complete.sd.ll.dd)
 ego.free.ld.specific <- enrichGO(gene = free.ld.specific,
                           OrgDb = org.Mpolymorpha71.eg.db,
                           universe = universe_set,
-                          ont           = "BP",
+                          ont           = "ALL",
                           pAdjustMethod = "BH",
                           pvalueCutoff  = 0.05,
                           qvalueCutoff  = 0.05,
@@ -2173,7 +2749,7 @@ free.sd.specific <- setdiff(complete.sd.ll.dd, complete.ld.ll.dd)
 ego.free.sd.specific <- enrichGO(gene = free.sd.specific,
                                  OrgDb = org.Mpolymorpha71.eg.db,
                                  universe = universe_set,
-                                 ont           = "BP",
+                                 ont           = "ALL",
                                  pAdjustMethod = "BH",
                                  pvalueCutoff  = 0.05,
                                  qvalueCutoff  = 0.05,
@@ -2181,6 +2757,8 @@ ego.free.sd.specific <- enrichGO(gene = free.sd.specific,
                                  keyType = "GID")
 
 barplot(ego.free.sd.specific, showCategory = 20)
+
+
 
 
 
@@ -2259,7 +2837,26 @@ ll_inter_tfs <- intersect(ld_ll_tfs, sd_ll_tfs)
 dd_inter_tfs <- intersect(ld_dd_tfs, sd_dd_tfs)
 bona_fide_tfs <- intersect(ll_inter_tfs, dd_inter_tfs)
 
-# Correlation of free running-rhythmic TFs with free running-rhytmhic genes
+
+# Venn diagrams for TFs
+library(VennDiagram)
+png("tfs_ll_inter.png", res=300, width = 1500, height = 1500)
+grid.newpage()
+draw.pairwise.venn(area1 = length(ld_ll_tfs), area2 = length(sd_ll_tfs),
+                   cross.area = length(intersect(ld_ll_tfs,sd_ll_tfs)),
+                   lwd = 3,category = c("LD","SD"),euler.d = T,col = c("blue","red"),fill = c("blue","red"),
+                   alpha = 0.3,cex = 2,cat.cex = 2,cat.dist = c(0.035,0.035), cat.pos = c(210,150))
+dev.off()
+
+png("tfs_dd_inter.png", res=300, width = 1500, height = 1500)
+grid.newpage()
+draw.pairwise.venn(area1 = length(ld_dd_tfs), area2 = length(sd_dd_tfs),
+                   cross.area = length(intersect(ld_dd_tfs,sd_dd_tfs)),
+                   lwd = 3,category = c("LD","SD"),euler.d = T,col = c("blue","red"),fill = c("blue","red"),
+                   alpha = 0.3,cex = 2,cat.cex = 2,cat.dist = c(0.035,0.035), cat.pos = c(210,150))
+dev.off()
+
+# Correlation of free running-rhythmic TFs with free running-rhythhic genes
 source("functions_circa_marchantia.R")
 
 circa_sd_ll <- read.table("tables/estimates_sd_ll.tsv", sep="\t")
@@ -2268,32 +2865,41 @@ circa_ld_ll <- read.table("tables/estimates_ld_ll.tsv", sep="\t")
 circa_ld_dd <- read.table("tables/estimates_ld_dd.tsv", sep="\t")
 
 
-plot.sd.ll.wave("Mp1g16800", "MpHY5", genes.expression, period=1, 
-                wave_parameters=circa_sd_ll["Mp1g16800",])
-plot.sd.dd.wave("Mp1g16800", "MpHY5", genes.expression, period=1, 
-                wave_parameters=circa_sd_dd["Mp1g16800",])
+png("hy5.png", width = 3100, height = 2500, res = 300)
+par(mfrow = c(2, 2))
 plot.ld.ll.wave("Mp1g16800", "MpHY5", genes.expression, period=1, 
                 wave_parameters=circa_ld_ll["Mp1g16800",])
 plot.ld.dd.wave("Mp1g16800", "MpHY5", genes.expression, period=1, 
                 wave_parameters=circa_ld_dd["Mp1g16800",])
+plot.sd.ll.wave("Mp1g16800", "MpHY5", genes.expression, period=1, 
+                wave_parameters=circa_sd_ll["Mp1g16800",])
+plot.sd.dd.wave("Mp1g16800", "MpHY5", genes.expression, period=1, 
+                wave_parameters=circa_sd_dd["Mp1g16800",])
+dev.off()
 
-plot.sd.ll.wave("Mp2g08360", "MpTRIHELIX11", genes.expression, period=1, 
-                wave_parameters=circa_sd_ll["Mp2g08360",])
-plot.sd.dd.wave("Mp2g08360", "MpTRIHELIX11", genes.expression, period=1, 
-                wave_parameters=circa_sd_dd["Mp2g08360",])
+png("trihelix11.png", width = 3100, height = 2500, res = 300)
+par(mfrow = c(2, 2))
 plot.ld.ll.wave("Mp2g08360", "MpTRIHELIX11", genes.expression, period=1, 
                 wave_parameters=circa_ld_ll["Mp2g08360",])
 plot.ld.dd.wave("Mp2g08360", "MpTRIHELIX11", genes.expression, period=1, 
                 wave_parameters=circa_ld_dd["Mp2g08360",])
+plot.sd.ll.wave("Mp2g08360", "MpTRIHELIX11", genes.expression, period=1, 
+                wave_parameters=circa_sd_ll["Mp2g08360",])
+plot.sd.dd.wave("Mp2g08360", "MpTRIHELIX11", genes.expression, period=1, 
+                wave_parameters=circa_sd_dd["Mp2g08360",])
+dev.off()
 
-plot.sd.ll.wave("Mp4g09730", "MpTRIHELIX31", genes.expression, period=1, 
-                wave_parameters=circa_sd_ll["Mp4g09730",])
-plot.sd.dd.wave("Mp4g09730", "MpTRIHELIX31", genes.expression, period=1, 
-                wave_parameters=circa_sd_dd["Mp4g09730",])
+png("trihelix31.png", width = 3100, height = 2500, res = 300)
+par(mfrow = c(2, 2))
 plot.ld.ll.wave("Mp4g09730", "MpTRIHELIX31", genes.expression, period=1, 
                 wave_parameters=circa_ld_ll["Mp4g09730",])
 plot.ld.dd.wave("Mp4g09730", "MpTRIHELIX31", genes.expression, period=1, 
                 wave_parameters=circa_ld_dd["Mp4g09730",])
+plot.sd.ll.wave("Mp4g09730", "MpTRIHELIX31", genes.expression, period=1, 
+                wave_parameters=circa_sd_ll["Mp4g09730",])
+plot.sd.dd.wave("Mp4g09730", "MpTRIHELIX31", genes.expression, period=1, 
+                wave_parameters=circa_sd_dd["Mp4g09730",])
+dev.off()
 
 
 circa_table_tf_inter <- read.table("tables/circacompare_intersection.tsv", header = T, sep = "\t")
@@ -2413,6 +3019,19 @@ dev.off()
 "Mp8g00970" %in% rownames(circa_sd_ll)
 "Mp8g00970" %in% rownames(circa_sd_dd)
 
+png("det1.png", width = 3100, height = 2500, res = 300)
+par(mfrow = c(3, 1))
+plot.ld.ll.wave("Mp8g00970", "DET1", genes.expression, period=1, 
+                wave_parameters=circa_ld_ll["Mp8g00970",])
+plot.ld.dd.wave("Mp8g00970", "DET1", genes.expression, period=1, 
+                wave_parameters=circa_ld_dd["Mp8g00970",])
+plot.sd.ll.wave("Mp8g00970", "DET1", genes.expression, period=1, 
+                wave_parameters=circa_sd_ll["Mp8g00970",])
+dev.off()
+
+plot.ld.ll.wave("Mp2g08360", "MpTRIHELIX11", genes.expression, period=1, 
+                wave_parameters=circa_ld_ll["Mp2g08360",])
+
 # GI
 "Mp1g13750" %in% rownames(circa_ld_ll)
 "Mp1g13750" %in% rownames(circa_ld_dd)
@@ -2449,11 +3068,47 @@ dev.off()
 "Mp1g18540" %in% rownames(circa_sd_ll)
 "Mp1g18540" %in% rownames(circa_sd_dd)
 
+
 # ELF3
 "Mp1g10870" %in% rownames(circa_ld_ll)
 "Mp1g10870" %in% rownames(circa_ld_dd)
 "Mp1g10870" %in% rownames(circa_sd_ll)
 "Mp1g10870" %in% rownames(circa_sd_dd)
+
+
+# Create clock genes table in each conditions
+clock.names <- c("TOC1", "PRR", "RVE", "DET1", "GI", "COL2", 
+                 "LNK", "COL6", "WDR2", "CDF1", "ELF3")
+
+clock.genes <- c("Mp3g09460", "Mp2g16560", "Mp2g14310", "Mp8g00970", "Mp1g13750", "Mp2g16350",
+                 "Mp1g10620", "Mp5g05940", "Mp5g01830", "Mp1g18540", "Mp1g10870")
+
+circacompare.sd.dd <- read.table("tables/circacompare_sd_dd.tsv", header = T, sep = "\t")
+circacompare.sd.ll <- read.table("tables/circacompare_sd_ll.tsv", header = T, sep = "\t")
+circacompare.ld.dd <- read.table("tables/circacompare_ld_dd.tsv", header = T, sep = "\t")
+circacompare.ld.ll <- read.table("tables/circacompare_ld_ll.tsv", header = T, sep = "\t")
+circacompare.sd.dd.12 <- read.table("tables/circacompare_sd_dd_12.tsv", header = T, sep = "\t")
+circacompare.sd.ll.12 <- read.table("tables/circacompare_sd_ll_12.tsv", header = T, sep = "\t")
+circacompare.ld.dd.12 <- read.table("tables/circacompare_ld_dd_12.tsv", header = T, sep = "\t")
+circacompare.ld.ll.12 <- read.table("tables/circacompare_ld_ll_12.tsv", header = T, sep = "\t")
+
+
+clock_df <- data.frame(Symbol = clock.names, ID = clock.genes, 
+           `LD-LL p-value` = pmin(circacompare.ld.ll[clock.genes, "rhythmic_p"],
+                                  circacompare.ld.ll.12[clock.genes, "rhythmic_p"]),
+           `SD-LL p-value` = pmin(circacompare.sd.ll[clock.genes, "rhythmic_p"],
+                                  circacompare.sd.ll.12[clock.genes, "rhythmic_p"]),
+           `LD-DD p-value` = pmin(circacompare.ld.dd[clock.genes, "rhythmic_p"],
+                                  circacompare.ld.dd.12[clock.genes, "rhythmic_p"]),
+           `SD-DD p-value` = pmin(circacompare.sd.dd[clock.genes, "rhythmic_p"],
+                                  circacompare.sd.dd.12[clock.genes, "rhythmic_p"]))
+
+clock_df_ordered <- clock_df[order(clock_df$LD.LL.p.value),]
+
+write.table(clock_df_ordered,file="clock_genes_df.tsv", sep="\t", row.names = F)
+
+
+
 
 
 ###########################  PHOTOSYNTHESIS ##########################
@@ -2464,6 +3119,8 @@ source("functions_circa_marchantia.R")
 library(circlize)
 
 heatmap.gene(gene.id = "Mp2g16560")
+
+# PSII
 
 # PsbA Mp5g10950
 # PsbD Mp1g11630 Mp1g19900 Mp4g18690 Mp5g07440
@@ -2492,6 +3149,27 @@ heatmap.gene(gene.id = "Mp2g16560")
 #https://www.sciencedirect.com/science/article/pii/S2211124724010477#sec8
 
 
+psb_ids <- c("Mp1g00680", "Mp2g02710", "Mp1g27590", "Mp7g05810", "Mp8g10040",
+              "Mp8g10770", "Mp5g12920", "Mp5g20290", "Mp5g20300", "Mp4g07510",
+              "Mp1g17690", "Mp3g05840", "Mp6g21460", "Mp8g12730", "Mp5g14190",
+              "Mp2g14630")
+
+lhcb_ids <- c("Mp7g05890", "Mp7g06740", "Mp7g09340", "Mp7g05880", "Mp7g05980",
+              "Mp7g06710", "Mp7g06720", "Mp7g06730", "Mp7g06750", "Mp7g06770",
+              "Mp7g06780", "Mp7g06790", "Mp7g09180", "Mp1g29620", "Mp2g13460",
+              "Mp7g08940", "Mp1g16850", "Mp4g10900", "Mp6g01650", "Mp8g12010")
+
+lhca_ids <- c("Mp2g15420", "Mp8g13180", "Mp4g00930", "Mp3g07840")
+
+psa_ids <- c("Mp5g04200", "Mp1g24020", "Mp2g02960", "Mp6g18440", "Mp7g13220",
+             "Mp4g06880", "Mp7g18150", "Mp4g20410")
+
+pet_ids <- c("Mp2g07880", "Mp4g02720", "Mp2g15250", "Mp4g16550", "Mp6g00090",
+             "Mp1g07170")
+
+atp_ids <- c("Mp1g25120", "Mp6g06680")
+
+
 # PsbP Mp1g00680 Mp2g02710 Mp1g27590 Mp7g05810 Mp8g10040 Mp8g10770 Mp5g12920 Mp5g20290 Mp5g20300
 # PsbQ Mp4g07510
 # PsbR Mp1g17690 Mp3g05840
@@ -2499,60 +3177,477 @@ heatmap.gene(gene.id = "Mp2g16560")
 # PsbY Mp8g12730
 # PsbW Mp5g14190
 # Psb28 Mp2g14630
+
 # LHCB1 Mp7g05890 Mp7g06740 Mp7g09340
 # LHCB2 Mp7g05880 Mp7g05980 Mp7g06710 Mp7g06720 Mp7g06730 Mp7g06750 Mp7g06770
 # Mp7g06780 Mp7g06790 Mp7g09180 Mp1g29620 Mp2g13460 
 # Estos son nuevos de PharaohFUN: Mp7g06760 Mp7g05530   
-# LHCB3 Mp7g08940 
-# LHCB4 Mp1g16850
-# LHCB5 Mp4g10900
-# LHCB6 Mp6g01650
-# LHCB7 Mp8g12010
 
-# LHCA1 Mp2g15420
-# LHCA2 Mp8g13180
-# LHCA3 Mp4g00930
-# LHCA4 Mp3g07840
+# LHCB3 <- "Mp7g08940"
+# LHCB4 <- "Mp1g16850"
+# LHCB5 <- "Mp4g10900"
+# LHCB6 <- "Mp6g01650"
+# LHCB7 <- "Mp8g12010"
+# 
+# LHCA1 <- "Mp2g15420"
+# LHCA2 <- "Mp8g13180"
+# LHCA3 <- "Mp4g00930"
+# LHCA4 <- "Mp3g07840"
+# 
+# psaD <- "Mp5g04200"
+# psaE <- "Mp1g24020"
+# psaF <- "Mp2g02960"
+# psaG <- "Mp6g18440"
+# psaH <- "Mp7g13220"
+# psaK <- "Mp4g06880"
+# psaL <- "Mp7g18150"
+# psaN <- "Mp4g20410"
+# 
+# petC <- "Mp2g07880"
+# petE <- "Mp4g02720"
+# petF <- "Mp2g15250"
+# petF <- "Mp4g16550"
+# petH <- "Mp6g00090"
+# petM <- "Mp1g07170"
+# atpF <- "Mp1g25120"
+# atpH <- "Mp6g06680"
+# 
+# PsbP <- c("Mp1g00680", "Mp2g02710", "Mp1g27590", "Mp7g05810", "Mp8g10040",
+#           "Mp8g10770", "Mp5g12920", "Mp5g20290", "Mp5g20300")
+# PsbQ <- "Mp4g07510"
+# PsbR <- c("Mp1g17690", "Mp3g05840")
+# PsbX <- "Mp6g21460"
+# PsbY <- "Mp8g12730"
+# PsbW <- "Mp5g14190"
+# Psb28<- "Mp2g14630"
+# 
+# LHCB1 <- c("Mp7g05890", "Mp7g06740", "Mp7g09340")
+# LHCB2 <- c("Mp7g05880", "Mp7g05980", "Mp7g06710", "Mp7g06720", "Mp7g06730", "Mp7g06750", "Mp7g06770",
+#            "Mp7g06780", "Mp7g06790", "Mp7g09180", "Mp1g29620", "Mp2g13460")
+# LHCB3 <- "Mp7g08940"
+# LHCB4 <- "Mp1g16850"
+# LHCB5 <- "Mp4g10900"
+# LHCB6 <- "Mp6g01650"
+# LHCB7 <- "Mp8g12010"
+# LHCA1 <- "Mp2g15420"
+# LHCA2 <- "Mp8g13180"
+# LHCA3 <- "Mp4g00930"
+# LHCA4 <- "Mp3g07840"
+# psaD <- "Mp5g04200"
+# psaE <- "Mp1g24020"
+# psaF <- "Mp2g02960"
+# psaG <- "Mp6g18440"
+# psaH <- "Mp7g13220"
+# psaK <- "Mp4g06880"
+# psaL <- "Mp7g18150"
+# psaN <- "Mp4g20410"
+# petC <- "Mp2g07880"
+# petE <- "Mp4g02720"
+# petF <- "Mp2g15250"
+# petF <- "Mp4g16550"
+# petH <- "Mp6g00090"
+# petM <- "Mp1g07170"
+# atpF <- "Mp1g25120"
+# atpH <- "Mp6g06680"
 
-# psaD Mp5g04200
-# psaE Mp1g24020
-# psaF Mp2g02960
-# psaG Mp6g18440
-# psaH Mp7g13220
-# psaK Mp4g06880
-# psaL Mp7g18150
-# psaN Mp4g20410
+# PsbP <- ("Mp1g00680 Mp2g02710 Mp1g27590 Mp7g05810 Mp8g10040 Mp8g10770 Mp5g12920 Mp5g20290 Mp5g20300
+# PsbQ Mp4g07510
+# PsbR Mp1g17690 Mp3g05840
+# PsbX Mp6g21460
+# PsbY Mp8g12730
+# PsbW Mp5g14190
+# Psb28 Mp2g14630
 
-# petC Mp2g07880
-# petE Mp4g02720
-# petF Mp2g15250
-# petF Mp4g16550
-# petH Mp6g00090
-# petM Mp1g07170
-# atpF Mp1g25120
-# atpH Mp6g06680
+# LHCB1 Mp7g05890 Mp7g06740 Mp7g09340
+# LHCB2 Mp7g05880 Mp7g05980 Mp7g06710 Mp7g06720 Mp7g06730 Mp7g06750 Mp7g06770
+# Mp7g06780 Mp7g06790 Mp7g09180 Mp1g29620 Mp2g13460 
+# Estos son nuevos de PharaohFUN: Mp7g06760 Mp7g05530 
+
+LHCA1 <- "Mp2g15420"
+LHCA2 <- "Mp8g13180"
+LHCA3 <- "Mp4g00930"
+LHCA4 <- "Mp3g07840"
+
+psaD <- "Mp5g04200"
+psaE <- "Mp1g24020"
+psaF <- "Mp2g02960"
+psaG <- "Mp6g18440"
+psaH <- "Mp7g13220"
+psaK <- "Mp4g06880"
+psaL <- "Mp7g18150"
+psaN <- "Mp4g20410"
+
+petC <- "Mp2g07880"
+petE <- "Mp4g02720"
+petF <- c("Mp2g15250", "Mp4g16550")
+petH <- "Mp6g00090"
+petM <- "Mp1g07170"
+
+atpF <- "Mp1g25120"
+atpH <- "Mp6g06680"
+
+PsbP <- c("Mp1g00680", "Mp2g02710", "Mp1g27590", "Mp7g05810", "Mp8g10040",
+          "Mp8g10770", "Mp5g12920", "Mp5g20290", "Mp5g20300")
+PsbQ <- "Mp4g07510"
+PsbR <- c("Mp1g17690", "Mp3g05840")
+PsbX <- "Mp6g21460"
+PsbY <- "Mp8g12730"
+PsbW <- "Mp5g14190"
+Psb28<- "Mp2g14630"
+
+LHCB1 <- c("Mp7g05890", "Mp7g06740", "Mp7g09340")
+LHCB2 <- c("Mp7g05880", "Mp7g05980", "Mp7g06710", "Mp7g06720", "Mp7g06730", "Mp7g06750", "Mp7g06770",
+           "Mp7g06780", "Mp7g06790", "Mp7g09180", "Mp1g29620", "Mp2g13460")
+
+# Estos son nuevos de PharaohFUN, decidir si incluirlos en LHCB2: Mp7g06760 Mp7g05530 
+
+LHCB3 <- "Mp7g08940"
+LHCB4 <- "Mp1g16850"
+LHCB5 <- "Mp4g10900"
+LHCB6 <- "Mp6g01650"
+LHCB7 <- "Mp8g12010"
 
 
 
+for (i in 1:4)
+{
+  png(paste0("photo_heatmaps/LHCA/LHCA", i))
+  heatmap.gene(gene.id = c(LHCA1, LHCA2, LHCA3, LHCA4)[i])
+  dev.off()
+}
+
+for (i in 1:8)
+{
+  png(paste0("photo_heatmaps/psa/psa", c("D","E","F","G","H","K","L","N")[i]))
+  heatmap.gene(gene.id = c(psaD,psaE,psaF,psaG,psaH,psaK,psaL,psaN)[i])
+  dev.off()
+}
+
+for (i in 1:6)
+{
+  png(paste0("photo_heatmaps/pet/pet", c("C","E","F_1","F_2","H","M")[i]))
+  heatmap.gene(gene.id = c(petC,petE,petF,petH,petM)[i])
+  dev.off()
+}
+
+png(paste0("photo_heatmaps/atp/atpF"))
+heatmap.gene(gene.id = "Mp1g25120")
+dev.off()
+
+png(paste0("photo_heatmaps/atp/atpH"))
+heatmap.gene(gene.id = "Mp6g06680")
+dev.off()
+
+for (i in 1:16)
+{
+  png(paste0("photo_heatmaps/psb/psb", c(paste0(rep("P_", length(PsbP)), 1:length(PsbP)),
+                                         paste0(rep("Q_", length(PsbQ)), 1:length(PsbQ)),
+                                         paste0(rep("R_", length(PsbR)), 1:length(PsbR)),
+                                         paste0(rep("X_", length(PsbX)), 1:length(PsbX)),
+                                         paste0(rep("Y_", length(PsbY)), 1:length(PsbY)),
+                                         paste0(rep("W_", length(PsbW)), 1:length(PsbW)),
+                                         paste0(rep("28_", length(Psb28)), 1:length(Psb28)))[i]))
+                                         
+  heatmap.gene(gene.id = c(PsbP,PsbQ,PsbR,PsbX,PsbY,PsbW,Psb28)[i])
+  dev.off()
+}
+
+for (i in 1:20)
+{
+  png(paste0("photo_heatmaps/LHCB/LHCB", c(paste0(rep("1_", length(LHCB1)), 1:length(LHCB1)),
+                                         paste0(rep("2_", length(LHCB2)), 1:length(LHCB2)),
+                                         "3", "4", "5", "6", "7")[i]))
+  
+  heatmap.gene(gene.id = c(LHCB1, LHCB2, LHCB3, LHCB4, LHCB5, LHCB6, LHCB7)[i])
+  dev.off()
+}
+
+# PsbS
+png("images/figure_photo/heatmap_psbs.png", width = 1400, height = 700)
+heatmap.gene(gene.id = "Mp8g05910")
+dev.off()
+
+# SEP1
+png("images/figure_photo/heatmap_sep1.png", width = 1400, height = 700)
+heatmap.gene(gene.id = "Mp3g06770")
+dev.off()
+
+# VDE
+png("images/figure_photo/heatmap_vde.png", width = 1400, height = 700)
+heatmap.gene(gene.id = "Mp7g15960")
+dev.off()
+
+
+# Explore rhythmicity of PsbS and VDE
+complete.ld.rhythmic.genes <- read.table("tables/ld.rhythmic.table.tsv", header = T)$V1
+complete.sd.rhythmic.genes <- read.table("tables/sd.rhythmic.table.tsv", header = T)$V1
+complete.sd.dd.rhythmic.genes <- read.table("tables/sd.dd.rhythmic.table.tsv", sep="\t")$x
+complete.ld.dd.rhythmic.genes <- read.table("tables/ld.dd.rhythmic.table.tsv", sep="\t")$x
+complete.sd.ll.rhythmic.genes <- read.table("tables/sd.ll.rhythmic.table.tsv", sep="\t")$x
+complete.ld.ll.rhythmic.genes <- read.table("tables/ld.ll.rhythmic.table.tsv", sep="\t")$x
+
+"Mp8g05910" %in% complete.ld.rhythmic.genes
+"Mp8g05910" %in% complete.sd.rhythmic.genes
+"Mp8g05910" %in% complete.ld.ll.rhythmic.genes
+"Mp8g05910" %in% complete.sd.ll.rhythmic.genes
+"Mp8g05910" %in% complete.ld.dd.rhythmic.genes
+"Mp8g05910" %in% complete.sd.dd.rhythmic.genes # F
+
+"Mp7g15960" %in% complete.ld.rhythmic.genes
+"Mp7g15960" %in% complete.sd.rhythmic.genes
+"Mp7g15960" %in% complete.ld.ll.rhythmic.genes
+"Mp7g15960" %in% complete.sd.ll.rhythmic.genes # F
+"Mp7g15960" %in% complete.ld.dd.rhythmic.genes # F
+"Mp7g15960" %in% complete.sd.dd.rhythmic.genes # F
 
 
 
+# Summary of distributions
+# LHCB + psb
+# SD
+combined_lhcb_psb <- c(LHCB1, LHCB2, LHCB3, LHCB4, LHCB5, LHCB6, LHCB7,
+                       PsbP,PsbQ,PsbR,PsbX,PsbY,PsbW,Psb28) 
 
 
+scaled_sd_combined_lhcb_psb <- scaled.sd.gene.expression[combined_lhcb_psb,]
+scaled_sd_combined_lhcb_psb_mean <- colMeans(scaled_sd_combined_lhcb_psb)
+
+scaled_sd_combined_lhcb_psb_mean_zt <- tapply(scaled_sd_combined_lhcb_psb_mean, factor(rep(seq(0,20,4), each = 3)), mean, na.rm = TRUE)
+scaled_sd_combined_lhcb_psb_mean_zt <- c(scaled_sd_combined_lhcb_psb_mean_zt, scaled_sd_combined_lhcb_psb_mean_zt[1])
+spline.current.gene.mean.sd.gene.expression <- spline(x=seq(from=0,to=24,by=4),y=scaled_sd_combined_lhcb_psb_mean_zt,n = 100)
+
+# Adjust min value to be 0
+spline.current.gene.mean.sd.gene.expression$y <- spline.current.gene.mean.sd.gene.expression$y - 
+  min(spline.current.gene.mean.sd.gene.expression$y)
+
+data_sd_combined_lhcb_psb <- data.frame(x = spline.current.gene.mean.sd.gene.expression$x,
+                                        y = spline.current.gene.mean.sd.gene.expression$y)
+
+ggplot(data_sd_combined_lhcb_psb, aes(x=x, y=y)) +
+  geom_area(fill="firebrick2", colour = "darkred", linewidth = 1.5) + theme(
+    panel.background = element_rect(fill = "transparent",
+                                    colour = NA_character_), # necessary to avoid drawing panel outline
+    panel.grid.major = element_blank(), # get rid of major grid
+    panel.grid.minor = element_blank(), # get rid of minor grid
+    plot.background = element_rect(fill = "transparent",
+                                   colour = NA_character_), # necessary to avoid drawing plot outline
+    legend.background = element_rect(fill = "transparent"),
+    legend.box.background = element_rect(fill = "transparent"),
+    legend.key = element_rect(fill = "transparent")
+  )
+ggsave("lhcb_psb_summary_sd.png", bg = "transparent", width = 12, height = 6)
 
 
+# LD
+scaled_ld_combined_lhcb_psb <- scaled.ld.gene.expression[combined_lhcb_psb,]
+scaled_ld_combined_lhcb_psb_mean <- colMeans(scaled_ld_combined_lhcb_psb)
+
+scaled_ld_combined_lhcb_psb_mean_zt <- tapply(scaled_ld_combined_lhcb_psb_mean, factor(rep(seq(0,20,4), each = 3)), mean, na.rm = TRUE)
+scaled_ld_combined_lhcb_psb_mean_zt <- c(scaled_ld_combined_lhcb_psb_mean_zt, scaled_ld_combined_lhcb_psb_mean_zt[1])
+spline.current.gene.mean.ld.gene.expression <- spline(x=seq(from=0,to=24,by=4),y=scaled_ld_combined_lhcb_psb_mean_zt,n = 100)
+
+# Adjust min value to be 0
+spline.current.gene.mean.ld.gene.expression$y <- spline.current.gene.mean.ld.gene.expression$y - 
+  min(spline.current.gene.mean.ld.gene.expression$y)
+
+data_ld_combined_lhcb_psb <- data.frame(x = spline.current.gene.mean.ld.gene.expression$x,
+                                        y = spline.current.gene.mean.ld.gene.expression$y)
+
+ggplot(data_ld_combined_lhcb_psb, aes(x=x, y=y)) +
+  geom_area(fill="royalblue3", colour = "darkblue", linewidth = 1.5) + theme(
+    panel.background = element_rect(fill = "transparent",
+                                    colour = NA_character_), # necessary to avoid drawing panel outline
+    panel.grid.major = element_blank(), # get rid of major grid
+    panel.grid.minor = element_blank(), # get rid of minor grid
+    plot.background = element_rect(fill = "transparent",
+                                   colour = NA_character_), # necessary to avoid drawing plot outline
+    legend.background = element_rect(fill = "transparent"),
+    legend.box.background = element_rect(fill = "transparent"),
+    legend.key = element_rect(fill = "transparent")
+  )
+ggsave("lhcb_psb_summary_ld.png", bg = "transparent", width = 12, height = 6)
+
+# pet
+combined_pet <- c(petC,petE,petF,petH,petM) 
 
 
+scaled_sd_combined_pet <- scaled.sd.gene.expression[combined_pet,]
+scaled_sd_combined_pet_mean <- colMeans(scaled_sd_combined_pet)
+
+scaled_sd_combined_pet_mean_zt <- tapply(scaled_sd_combined_pet_mean, factor(rep(seq(0,20,4), each = 3)), mean, na.rm = TRUE)
+scaled_sd_combined_pet_mean_zt <- c(scaled_sd_combined_pet_mean_zt, scaled_sd_combined_pet_mean_zt[1])
+spline.current.gene.mean.sd.gene.expression <- spline(x=seq(from=0,to=24,by=4),y=scaled_sd_combined_pet_mean_zt,n = 100)
+
+# Adjust min value to be 0
+spline.current.gene.mean.sd.gene.expression$y <- spline.current.gene.mean.sd.gene.expression$y - 
+  min(spline.current.gene.mean.sd.gene.expression$y)
+
+data_sd_combined_pet <- data.frame(x = spline.current.gene.mean.sd.gene.expression$x,
+                                        y = spline.current.gene.mean.sd.gene.expression$y)
+
+ggplot(data_sd_combined_pet, aes(x=x, y=y)) +
+  geom_area(fill="firebrick2", colour = "darkred", linewidth = 1.5) + theme(
+    panel.background = element_rect(fill = "transparent",
+                                    colour = NA_character_), # necessary to avoid drawing panel outline
+    panel.grid.major = element_blank(), # get rid of major grid
+    panel.grid.minor = element_blank(), # get rid of minor grid
+    plot.background = element_rect(fill = "transparent",
+                                   colour = NA_character_), # necessary to avoid drawing plot outline
+    legend.background = element_rect(fill = "transparent"),
+    legend.box.background = element_rect(fill = "transparent"),
+    legend.key = element_rect(fill = "transparent")
+  )
+ggsave("pet_summary_sd.png", bg = "transparent", width = 12, height = 6)
+
+scaled_ld_combined_pet <- scaled.ld.gene.expression[combined_pet,]
+scaled_ld_combined_pet_mean <- colMeans(scaled_ld_combined_pet)
+
+scaled_ld_combined_pet_mean_zt <- tapply(scaled_ld_combined_pet_mean, factor(rep(seq(0,20,4), each = 3)), mean, na.rm = TRUE)
+scaled_ld_combined_pet_mean_zt <- c(scaled_ld_combined_pet_mean_zt, scaled_ld_combined_pet_mean_zt[1])
+spline.current.gene.mean.ld.gene.expression <- spline(x=seq(from=0,to=24,by=4),y=scaled_ld_combined_pet_mean_zt,n = 100)
+
+# Adjust min value to be 0
+spline.current.gene.mean.ld.gene.expression$y <- spline.current.gene.mean.ld.gene.expression$y - 
+  min(spline.current.gene.mean.ld.gene.expression$y)
+
+data_ld_combined_pet <- data.frame(x = spline.current.gene.mean.ld.gene.expression$x,
+                                        y = spline.current.gene.mean.ld.gene.expression$y)
+
+ggplot(data_ld_combined_pet, aes(x=x, y=y)) +
+  geom_area(fill="royalblue3", colour = "darkblue", linewidth = 1.5) + theme(
+    panel.background = element_rect(fill = "transparent",
+                                    colour = NA_character_), # necessary to avoid drawing panel outline
+    panel.grid.major = element_blank(), # get rid of major grid
+    panel.grid.minor = element_blank(), # get rid of minor grid
+    plot.background = element_rect(fill = "transparent",
+                                   colour = NA_character_), # necessary to avoid drawing plot outline
+    legend.background = element_rect(fill = "transparent"),
+    legend.box.background = element_rect(fill = "transparent"),
+    legend.key = element_rect(fill = "transparent")
+  )
+ggsave("pet_summary_ld.png", bg = "transparent", width = 12, height = 6)
+
+# lhca + psa
+combined_lhca_psa <- c(LHCA1, LHCA2, LHCA3, LHCA4, 
+                       psaD,psaE,psaF,psaG,psaH,psaK,psaL,psaN)
 
 
+scaled_sd_combined_lhca_psa <- scaled.sd.gene.expression[combined_lhca_psa,]
+scaled_sd_combined_lhca_psa_mean <- colMeans(scaled_sd_combined_lhca_psa)
+
+scaled_sd_combined_lhca_psa_mean_zt <- tapply(scaled_sd_combined_lhca_psa_mean, factor(rep(seq(0,20,4), each = 3)), mean, na.rm = TRUE)
+scaled_sd_combined_lhca_psa_mean_zt <- c(scaled_sd_combined_lhca_psa_mean_zt, scaled_sd_combined_lhca_psa_mean_zt[1])
+spline.current.gene.mean.sd.gene.expression <- spline(x=seq(from=0,to=24,by=4),y=scaled_sd_combined_lhca_psa_mean_zt,n = 100)
+
+# Adjust min value to be 0
+spline.current.gene.mean.sd.gene.expression$y <- spline.current.gene.mean.sd.gene.expression$y - 
+  min(spline.current.gene.mean.sd.gene.expression$y)
+
+data_sd_combined_lhca_psa <- data.frame(x = spline.current.gene.mean.sd.gene.expression$x,
+                                   y = spline.current.gene.mean.sd.gene.expression$y)
+
+ggplot(data_sd_combined_lhca_psa, aes(x=x, y=y)) +
+  geom_area(fill="firebrick2", colour = "darkred", linewidth = 1.5) + theme(
+    panel.background = element_rect(fill = "transparent",
+                                    colour = NA_character_), # necessary to avoid drawing panel outline
+    panel.grid.major = element_blank(), # get rid of major grid
+    panel.grid.minor = element_blank(), # get rid of minor grid
+    plot.background = element_rect(fill = "transparent",
+                                   colour = NA_character_), # necessary to avoid drawing plot outline
+    legend.background = element_rect(fill = "transparent"),
+    legend.box.background = element_rect(fill = "transparent"),
+    legend.key = element_rect(fill = "transparent")
+  )
+ggsave("lhca_psa_summary_sd.png", bg = "transparent", width = 12, height = 6)
+
+scaled_ld_combined_lhca_psa <- scaled.ld.gene.expression[combined_lhca_psa,]
+scaled_ld_combined_lhca_psa_mean <- colMeans(scaled_ld_combined_lhca_psa)
+
+scaled_ld_combined_lhca_psa_mean_zt <- tapply(scaled_ld_combined_lhca_psa_mean, factor(rep(seq(0,20,4), each = 3)), mean, na.rm = TRUE)
+scaled_ld_combined_lhca_psa_mean_zt <- c(scaled_ld_combined_lhca_psa_mean_zt, scaled_ld_combined_lhca_psa_mean_zt[1])
+spline.current.gene.mean.ld.gene.expression <- spline(x=seq(from=0,to=24,by=4),y=scaled_ld_combined_lhca_psa_mean_zt,n = 100)
+
+# Adjust min value to be 0
+spline.current.gene.mean.ld.gene.expression$y <- spline.current.gene.mean.ld.gene.expression$y - 
+  min(spline.current.gene.mean.ld.gene.expression$y)
+
+data_ld_combined_lhca_psa <- data.frame(x = spline.current.gene.mean.ld.gene.expression$x,
+                                   y = spline.current.gene.mean.ld.gene.expression$y)
+
+ggplot(data_ld_combined_lhca_psa, aes(x=x, y=y)) +
+  geom_area(fill="royalblue3", colour = "darkblue", linewidth = 1.5) + theme(
+    panel.background = element_rect(fill = "transparent",
+                                    colour = NA_character_), # necessary to avoid drawing panel outline
+    panel.grid.major = element_blank(), # get rid of major grid
+    panel.grid.minor = element_blank(), # get rid of minor grid
+    plot.background = element_rect(fill = "transparent",
+                                   colour = NA_character_), # necessary to avoid drawing plot outline
+    legend.background = element_rect(fill = "transparent"),
+    legend.box.background = element_rect(fill = "transparent"),
+    legend.key = element_rect(fill = "transparent")
+  )
+ggsave("lhca_psa_summary_ld.png", bg = "transparent", width = 12, height = 6)
 
 
+# atp
+combined_atp <- c(atpF, atpH)
 
 
+scaled_sd_combined_atp <- scaled.sd.gene.expression[combined_atp,]
+scaled_sd_combined_atp_mean <- colMeans(scaled_sd_combined_atp)
 
+scaled_sd_combined_atp_mean_zt <- tapply(scaled_sd_combined_atp_mean, factor(rep(seq(0,20,4), each = 3)), mean, na.rm = TRUE)
+scaled_sd_combined_atp_mean_zt <- c(scaled_sd_combined_atp_mean_zt, scaled_sd_combined_atp_mean_zt[1])
+spline.current.gene.mean.sd.gene.expression <- spline(x=seq(from=0,to=24,by=4),y=scaled_sd_combined_atp_mean_zt,n = 100)
 
+# Adjust min value to be 0
+spline.current.gene.mean.sd.gene.expression$y <- spline.current.gene.mean.sd.gene.expression$y - 
+  min(spline.current.gene.mean.sd.gene.expression$y)
 
+data_sd_combined_atp <- data.frame(x = spline.current.gene.mean.sd.gene.expression$x,
+                                        y = spline.current.gene.mean.sd.gene.expression$y)
 
+ggplot(data_sd_combined_atp, aes(x=x, y=y)) +
+  geom_area(fill="firebrick2", colour = "darkred", linewidth = 1.5) + theme(
+    panel.background = element_rect(fill = "transparent",
+                                    colour = NA_character_), # necessary to avoid drawing panel outline
+    panel.grid.major = element_blank(), # get rid of major grid
+    panel.grid.minor = element_blank(), # get rid of minor grid
+    plot.background = element_rect(fill = "transparent",
+                                   colour = NA_character_), # necessary to avoid drawing plot outline
+    legend.background = element_rect(fill = "transparent"),
+    legend.box.background = element_rect(fill = "transparent"),
+    legend.key = element_rect(fill = "transparent")
+  )
+ggsave("atp_summary_sd.png", bg = "transparent", width = 12, height = 6)
+
+scaled_ld_combined_atp <- scaled.ld.gene.expression[combined_atp,]
+scaled_ld_combined_atp_mean <- colMeans(scaled_ld_combined_atp)
+
+scaled_ld_combined_atp_mean_zt <- tapply(scaled_ld_combined_atp_mean, factor(rep(seq(0,20,4), each = 3)), mean, na.rm = TRUE)
+scaled_ld_combined_atp_mean_zt <- c(scaled_ld_combined_atp_mean_zt, scaled_ld_combined_atp_mean_zt[1])
+spline.current.gene.mean.ld.gene.expression <- spline(x=seq(from=0,to=24,by=4),y=scaled_ld_combined_atp_mean_zt,n = 100)
+
+# Adjust min value to be 0
+spline.current.gene.mean.ld.gene.expression$y <- spline.current.gene.mean.ld.gene.expression$y - 
+  min(spline.current.gene.mean.ld.gene.expression$y)
+
+data_ld_combined_atp <- data.frame(x = spline.current.gene.mean.ld.gene.expression$x,
+                                        y = spline.current.gene.mean.ld.gene.expression$y)
+
+ggplot(data_ld_combined_atp, aes(x=x, y=y)) +
+  geom_area(fill="royalblue3", colour = "darkblue", linewidth = 1.5) + theme(
+    panel.background = element_rect(fill = "transparent",
+                                    colour = NA_character_), # necessary to avoid drawing panel outline
+    panel.grid.major = element_blank(), # get rid of major grid
+    panel.grid.minor = element_blank(), # get rid of minor grid
+    plot.background = element_rect(fill = "transparent",
+                                   colour = NA_character_), # necessary to avoid drawing plot outline
+    legend.background = element_rect(fill = "transparent"),
+    legend.box.background = element_rect(fill = "transparent"),
+    legend.key = element_rect(fill = "transparent")
+  )
+ggsave("atp_summary_ld.png", bg = "transparent", width = 12, height = 6)
 
 
 # Chloroplasts photorelocation plots
@@ -2570,6 +3665,79 @@ source("functions_circa_marchantia.R")
 # "Mp5g06760" "Mp8g10000" "Mp8g18590" "Mp8g18700" PMI related
 # No WEB1
 
+# Heatmaps
+png(paste0("chloro_heatmaps/phot.png"))
+heatmap.gene(gene.id = "Mp5g03810")
+dev.off()
+
+png(paste0("chloro_heatmaps/chup1.png"))
+heatmap.gene(gene.id = "Mp7g03540")
+dev.off()
+
+png(paste0("chloro_heatmaps/kac.png"))
+heatmap.gene(gene.id = "Mp3g03760")
+dev.off()
+
+png(paste0("chloro_heatmaps/blus1.png"))
+heatmap.gene(gene.id = "Mp8g10870")
+dev.off()
+
+png(paste0("chloro_heatmaps/thrumin1_1.png"))
+heatmap.gene(gene.id = "Mp1g07590")
+dev.off()
+
+png(paste0("chloro_heatmaps/thrumin1_2.png"))
+heatmap.gene(gene.id = "Mp3g04860")
+dev.off()
+
+png(paste0("chloro_heatmaps/jac1_1.png"))
+heatmap.gene(gene.id = "Mp6g17960") # Not expressed
+dev.off()
+
+png(paste0("chloro_heatmaps/jac1_2.png"))
+heatmap.gene(gene.id = "Mp6g06160") # Not expressed
+dev.off()
+
+png(paste0("chloro_heatmaps/jac1_3.png"))
+heatmap.gene(gene.id = "Mp3g09960")
+dev.off()
+
+png(paste0("chloro_heatmaps/thrumin1_4.png"))
+heatmap.gene(gene.id = "Mp5g14210")
+dev.off()
+
+png(paste0("chloro_heatmaps/pmi1_rel_1.png"))
+heatmap.gene(gene.id = "Mp2g25860")
+dev.off()
+
+png(paste0("chloro_heatmaps/pmi1_rel_2.png"))
+heatmap.gene(gene.id = "Mp5g06760")
+dev.off()
+
+png(paste0("chloro_heatmaps/pmi1_rel_3.png"))
+heatmap.gene(gene.id = "Mp8g10000")
+dev.off()
+
+png(paste0("chloro_heatmaps/pmi1_rel_4.png"))
+heatmap.gene(gene.id = "Mp8g18590")
+dev.off()
+
+png(paste0("chloro_heatmaps/pmi1_rel_5.png"))
+heatmap.gene(gene.id = "Mp8g18700")
+dev.off()
+
+png(paste0("chloro_heatmaps/nch1.png"))
+heatmap.gene(gene.id = "Mp5g07060")
+dev.off()
+
+png(paste0("chloro_heatmaps/rtn1.png"))
+heatmap.gene(gene.id = "Mp6g03260")
+dev.off()
+# Exploration of rhythmicity among photorelocation genes
+source("functions_circa_marchantia.R")
+complete.ld.rhythmic.genes <- read.table("tables/ld.rhythmic.table.tsv", header = T)$V1
+complete.sd.rhythmic.genes <- read.table("tables/sd.rhythmic.table.tsv", header = T)$V1
+
 # Photoreceptor PHOT and its substrate BLUS1
 "Mp5g03810" %in% complete.ld.rhythmic.genes
 "Mp5g03810" %in% complete.sd.rhythmic.genes
@@ -2578,15 +3746,39 @@ source("functions_circa_marchantia.R")
 "Mp8g10870" %in% complete.sd.rhythmic.genes
 
 plot.ld.sd("Mp5g03810", "PHOT", genes.expression)
+plot.ld.sd("Mp8g10870", "BLUS", genes.expression)
 
-# Motility CHUP1, KAC, THRUM1 and PMI1
+# BLUS1 Not involved in this
+# RTN1
+"Mp6g03260" %in% complete.ld.rhythmic.genes
+"Mp6g03260" %in% complete.sd.rhythmic.genes
+
+#NCH1
+"Mp5g07060" %in% complete.ld.rhythmic.genes
+"Mp5g07060" %in% complete.sd.rhythmic.genes
+
+
+
+# Mp5g03810 PHOT
+# Mp7g03540	CHUP1
+# Mp3g03760	KAC
+# Mp8g10870 BLUS1
+# Mp1g07590	THRUMIN1
+# Mp3g04860	THRUMIN1
+# Mp6g17960 Mp6g06160 Mp3g09960 JAC1
+# Mp5g14210 THRUMIN1 no glutaredoxin 
+# Mp2g25860 PMI1 related
+# "Mp5g06760" "Mp8g10000" "Mp8g18590" "Mp8g18700" PMI related
+# No WEB1
+
+# Motility CHUP1, KAC, THRUM1, THRUM1 and PMI1
 c("Mp7g03540", "Mp3g03760", "Mp1g07590", "Mp3g04860", "Mp2g25860") %in% complete.ld.rhythmic.genes
 c("Mp7g03540", "Mp3g03760", "Mp1g07590", "Mp3g04860", "Mp2g25860") %in% complete.sd.rhythmic.genes
 
 plot.ld.sd("Mp3g03760", "KAC", genes.expression)
 plot.ld.sd("Mp7g03540", "CHUP1", genes.expression)
 
-# Signaling JAC1, WEB1, and PMI2
+# Signaling JAC1, JAC1, JAC1 and PMI2x4
 c("Mp6g17960", "Mp6g06160", "Mp3g09960", "Mp5g06760", "Mp8g10000", "Mp8g18590", "Mp8g18700") %in% complete.ld.rhythmic.genes
 c("Mp6g17960", "Mp6g06160", "Mp3g09960", "Mp5g06760", "Mp8g10000", "Mp8g18590", "Mp8g18700") %in% complete.sd.rhythmic.genes
 
@@ -2595,10 +3787,51 @@ png("phot.png")
 plot.ld.sd.wave("Mp5g03810", "PHOT",  genes.expression, wave_parameters =  circa_table_genescarab["Mp5g03810",])
 dev.off()
 
-plot.ld.sd.wave("Mp2g14310", "RVE1", genes.expression, wave_parameters =  circa_table_genescarab["Mp2g14310",])
-plot.ld.ll("Mp2g14310", "RVE1", genes.expression)
-plot.sd.ll("Mp2g14310", "RVE1", genes.expression)
 
+### Photoreceptors ###
+
+complete.ld.rhythmic.genes <- read.table("tables/ld.rhythmic.table.tsv", header = T)$V1
+complete.sd.rhythmic.genes <- read.table("tables/sd.rhythmic.table.tsv", header = T)$V1
+
+source("functions_circa_marchantia.R")
+# MpPHY, MpCRY, MpUVR8, MpPHOT
+
+photoreceptors <- c("Mp2g16090", "Mp2g17590", "Mp2g11590", "Mp5g03810")
+photoreceptors %in% complete.ld.rhythmic.genes
+photoreceptors %in% complete.sd.rhythmic.genes
+
+plot.ld.sd("Mp2g16090", "MpPHY", genes.expression = genes.expression)
+plot.ld.sd("Mp2g17590", "MpCRY", genes.expression = genes.expression)
+plot.ld.sd("Mp2g11590", "MpUVR8", genes.expression = genes.expression)
+plot.ld.sd("Mp5g03810", "MpPHOT", genes.expression = genes.expression)
+
+
+circa_table_sd_dd <- subset(read.table("tables/circacompare_sd_dd.tsv", header = T, sep = "\t"), rhythmic_p < 0.05)
+circa_table_ld_dd <- subset(read.table("tables/circacompare_ld_dd.tsv", header = T, sep = "\t"), rhythmic_p < 0.05)
+circa_table_sd_ll <- subset(read.table("tables/circacompare_sd_ll.tsv", header = T, sep = "\t"), rhythmic_p < 0.05)
+circa_table_ld_ll <- subset(read.table("tables/circacompare_ld_ll.tsv", header = T, sep = "\t"), rhythmic_p < 0.05)
+
+photoreceptors[photoreceptors %in% rownames(circa_table_ld_ll)]
+photoreceptors[photoreceptors %in% rownames(circa_table_sd_ll)]
+photoreceptors[photoreceptors %in% rownames(circa_table_ld_dd)]
+photoreceptors[photoreceptors %in% rownames(circa_table_sd_dd)]
+
+# MpPHOT is rhythmic in LD-LL and SD-LL
+
+
+# Expression in each condition
+
+mean(ld.gene.expression[photoreceptors,])
+mean(ld.ll.gene.expression[photoreceptors,])
+mean(ld.dd.gene.expression[photoreceptors,])
+mean(sd.gene.expression[photoreceptors,])
+mean(sd.ll.gene.expression[photoreceptors,])
+mean(sd.dd.gene.expression[photoreceptors,])
+
+
+
+
+# ESTO SE TIENE QUE IR DE AQUÍ EN CUANTO SE CONFIRME QUE ESTÁ EN EL DE FUNCIONES
 # Create rhythmic plots
 circa_table_genescarab <- read.table("tables/circacompare_intersection.tsv", header = T, sep = "\t")
 head(circa_table_genescarab)
@@ -3641,1815 +4874,3 @@ ego.results <- lapply(list(ll_union=ll_union, ll_inter=ll_inter,
 
 barplot(ego.results$ll_union)
 lapply(ego.results, function(x) as.data.frame(x))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-################################################## 
-library(circacompare)
-rain.ld.rhythmic.table <- read.table("ld.rhytmic.table.tsv",header=T)
-rain.ld.rhythmic.genes <- rain.ld.rhythmic.table$V1
-length(rain.ld.rhythmic.genes)
-rain.sd.rhythmic.table <- read.table("sd.rhytmic.table.tsv",header=T)
-rain.sd.rhythmic.genes <- rain.sd.rhythmic.table$V1
-length(rain.sd.rhythmic.genes)
-
-genes.expression <- read.table(file ="marchantia_gene_expression.tsv",sep="\t",header=T,as.is=T)
-head(genes.expression)
-
-#### Rhythmic genes in LD and SD (as determined by RAIN)
-both.ld.sd.rhythmic.genes <- intersect(rain.ld.rhythmic.genes,rain.sd.rhythmic.genes)
-length(both.ld.sd.rhythmic.genes)
-
-circacompare.ld.sd <- matrix(nrow=length(both.ld.sd.rhythmic.genes),ncol=15)
-rownames(circacompare.ld.sd) <- both.ld.sd.rhythmic.genes
-
-ld.zt <- paste("ld",paste0("zt",sprintf(fmt = "%02d",seq(from=0,to=20,by=4))),sep="_")
-sd.zt <- paste("sd",paste0("zt",sprintf(fmt = "%02d",seq(from=0,to=20,by=4))),sep="_")
-
-#Construct a table with the circadian data for all the genes rhythmic in both LD and SD conditions
-for(i in 1:length(both.ld.sd.rhythmic.genes))
-{
-  gene.i <- both.ld.sd.rhythmic.genes[i]
-  
-  ld.expression.i <- genes.expression[gene.i,c(paste(ld.zt,1,sep="_"),paste(ld.zt,2,sep="_"), paste(ld.zt,3,sep="_"))]
-  sd.expression.i <- genes.expression[gene.i,c(paste(sd.zt,1,sep="_"),paste(sd.zt,2,sep="_"), paste(ld.zt,3,sep="_"))]
-  ld.sd.expression.i <- cbind(ld.expression.i,sd.expression.i)
-  ld.sd.vector <- c()
-  for (j in 1:ncol(ld.sd.expression.i))
-  {
-    ld.sd.vector <- c(ld.sd.vector,ld.sd.expression.i[1,j])
-  }
-  
-  time.points <- seq(from=0,by=4,length.out = 18)
-  
-  ld.sd.df <- data.frame(time=c(time.points,time.points),
-                         measure=ld.sd.vector,
-                         group=c(rep("ld",18),rep("sd",18)))
-  
-  out.i <- circacompare(x = ld.sd.df, col_time = "time", col_group = "group",
-                        col_outcome = "measure",alpha_threshold = 1 )
-  circacompare.ld.sd[i,] <- out.i[[2]][,2]
-}
-
-colnames(circacompare.ld.sd) <- out.i[[2]][,1]
-write.table(circacompare.ld.sd,file="circacompare_intersection.tsv", sep="\t")
-
-#Amplitude
-par(lwd=3)
-boxplot(circacompare.ld.sd[,"ld amplitude estimate" ],
-        circacompare.ld.sd[,"sd amplitude estimate" ],outline=F,
-        col=c("royalblue3","tomato3"),names=c("LD","SD"),cex.axis=1.5, main="Distribution of amplitudes")
-
-sum(circacompare.ld.sd[,"Amplitude difference estimate" ] < 0)
-sum(circacompare.ld.sd[,"Amplitude difference estimate" ] < 0) / length(both.ld.sd.rhythmic.genes)
-sum(circacompare.ld.sd[,"P-value for amplitude difference" ] < 0.05)
-sum(circacompare.ld.sd[,"P-value for amplitude difference" ] < 0.05)/length(both.ld.sd.rhythmic.genes)
-
-#Mesor
-boxplot(circacompare.ld.sd[,"ld mesor estimate" ],circacompare.ld.sd[,"sd mesor estimate" ],
-        outline=F,col=c("royalblue3","tomato3"),names=c("LD","SD"),cex.axis=1.5, main="Distribution of mesor")
-sum(circacompare.ld.sd[,"Mesor difference estimate" ] < 0) /length(both.ld.sd.rhythmic.genes)
-sum(circacompare.ld.sd[,"Mesor difference estimate" ] > 0) /length(both.ld.sd.rhythmic.genes)
-sum(circacompare.ld.sd[,"P-value for mesor difference" ] < 0.05)/length(both.ld.sd.rhythmic.genes)
-
-
-#Phase
-boxplot(circacompare.ld.sd[,"ld peak time hours" ],circacompare.ld.sd[,"sd peak time hours" ],
-        outline=F,col=c("royalblue3","tomato3"),names=c("LD","SD"),cex.axis=1.5, main="Distribution of phase")
-median(circacompare.ld.sd[,"ld peak time hours" ])-median(circacompare.ld.sd[,"sd peak time hours" ])
-sum(circacompare.ld.sd[,"Phase difference estimate" ] < 0) /length(both.ld.sd.rhythmic.genes)
-sum(circacompare.ld.sd[,"Phase difference estimate" ] > 0) /length(both.ld.sd.rhythmic.genes)
-sum(circacompare.ld.sd[,"P-value for difference in phase" ] < 0.05)/length(both.ld.sd.rhythmic.genes)
-sum(circacompare.ld.sd[,"P-value for difference in phase" ] < 0.05)
-
-# This should be circular
-custom_set <- list(circacompare.ld.sd[,"ld peak time hours" ],
-                   circacompare.ld.sd[,"sd peak time hours" ]) # Load vector of phases
-ind_table <- sapply(custom_set, function(x) create_circular_table(x, iter=10))
-ind_table2 <- as.data.frame(t(ind_table))
-ind_table2 <- matrix(c(as.numeric(ind_table[,2]), as.numeric(ind_table[,1])), ncol = 10, byrow =T)
-colnames(ind_table2) <- rownames(ind_table)
-rownames(ind_table2) <- c("SD", "LD")
-ind_table2 <- as.data.frame(ind_table2)
-nn_ind_table <- non_negative_table(ind_table2)
-circular_boxplot(res.table = nn_ind_table, "ld_sd_phases.png", tr.height = 0.14, color.palette = "Egypt")
-
-nn_ind_table$median[2] - nn_ind_table$median[1]
-
- ##### Rhythmic genes in LD or SD (as determined by RAIN)
-total.rhythmic.genes <- unique(c(rain.ld.rhythmic.genes,rain.sd.rhythmic.genes))
-length(total.rhythmic.genes)
-
-circacompare.ld.sd.total <- matrix(nrow=length(total.rhythmic.genes),ncol=15)
-rownames(circacompare.ld.sd.total) <- total.rhythmic.genes
-
-#Construct a table with the circadian data for all the genes rhythmic in LD, SD or both conditions
-#Genes must not have an expression value of 0 at the six temporal points of one or both conditions 
-#in order extract the circadian data using CircaCompare
-for(i in 1:length(total.rhythmic.genes))
-{
-  gene.i <- total.rhythmic.genes[i]
-  
-  ld.expression.i <- genes.expression[gene.i,c(paste(ld.zt,1,sep="_"),paste(ld.zt,2,sep="_"), c(paste(ld.zt,3,sep="_")))]
-  sd.expression.i <- genes.expression[gene.i,c(paste(sd.zt,1,sep="_"),paste(sd.zt,2,sep="_"), c(paste(sd.zt,3,sep="_")))]
-  ld.sd.expression.i <- cbind(ld.expression.i,sd.expression.i)
-  ld.sd.vector <- c()
-  for (j in 1:ncol(ld.sd.expression.i))
-  {
-    ld.sd.vector <- c(ld.sd.vector,ld.sd.expression.i[1,j])
-  }
-  
-  if ((sum(ld.sd.vector[1:18] == 0) != 18) && (sum(ld.sd.vector[19:36] == 0)) != 18)
-  {
-    time.points <- seq(from=0,by=4,length.out = 18)
-    
-    ld.sd.df <- data.frame(time=c(time.points,time.points),
-                           measure=ld.sd.vector,
-                           group=c(rep("ld",18),rep("sd",18)))
-    
-    out.i <- circacompare(x = ld.sd.df, col_time = "time", col_group = "group",
-                          col_outcome = "measure",alpha_threshold = 1 )
-    circacompare.ld.sd.total[i,] <- out.i[[2]][,2]
-  }
-  else
-  {
-    circacompare.ld.sd.total[i,] <- NA
-  }
-}
-
-
-colnames(circacompare.ld.sd.total) <- out.i[[2]][,1]
-out.i[[1]]
-circacompare.ld.sd.total
-dim(circacompare.ld.sd.total)
-circacompare.ld.sd.total <- circacompare.ld.sd.total[!is.na(circacompare.ld.sd.total[,1]),]
-write.table(circacompare.ld.sd.total, file = "circacompare_complete.tsv", sep="\t",row.names = T)
-
-#Amplitude
-par(lwd=3)
-boxplot(circacompare.ld.sd.total[,"ld amplitude estimate" ],
-        circacompare.ld.sd.total[,"sd amplitude estimate" ],outline=F,
-        col=c("royalblue3","tomato3"),names=c("LD","SD"),cex.axis=1.5, main="Distribution of amplitude")
-sum(circacompare.ld.sd.total[,"Amplitude difference estimate" ] < 0)
-sum(circacompare.ld.sd.total[,"Amplitude difference estimate" ] < 0) / length(total.rhythmic.genes)
-sum(circacompare.ld.sd.total[,"P-value for amplitude difference" ] < 0.05)
-sum(circacompare.ld.sd.total[,"P-value for amplitude difference" ] < 0.05)/length(total.rhythmic.genes)
-
-#Mesor
-boxplot(circacompare.ld.sd.total[,"ld mesor estimate" ],
-        circacompare.ld.sd.total[,"sd mesor estimate" ],outline=F,
-        col=c("royalblue3","tomato3"),names=c("LD","SD"),cex.axis=1.5, main="Distribution of mesor")
-sum(circacompare.ld.sd.total[,"Mesor difference estimate" ] < 0)
-sum(circacompare.ld.sd.total[,"Mesor difference estimate" ] < 0) / length(total.rhythmic.genes)
-sum(circacompare.ld.sd.total[,"P-value for mesor difference" ] < 0.05)
-sum(circacompare.ld.sd.total[,"P-value for mesor difference" ] < 0.05)/length(total.rhythmic.genes)
-
-#Phase
-boxplot(circacompare.ld.sd.total[,"ld peak time hours" ],circacompare.ld.sd.total[,"sd peak time hours" ],
-        outline=F,col=c("royalblue3","tomato3"),names=c("LD","SD"),cex.axis=1.5, main="Distribution of phase")
-median(circacompare.ld.sd.total[,"ld peak time hours" ])-median(circacompare.ld.sd.total[,"sd peak time hours" ])
-sum(circacompare.ld.sd.total[,"Phase difference estimate" ] < 0) /length(total.rhythmic.genes)
-sum(circacompare.ld.sd.total[,"Phase difference estimate" ] > 0) /length(total.rhythmic.genes)
-sum(circacompare.ld.sd.total[,"P-value for difference in phase" ] < 0.05)/length(total.rhythmic.genes)
-sum(circacompare.ld.sd.total[,"P-value for difference in phase" ] < 0.05)
-
-#### LL-LD conditions
-circacompare.ld.ll <- matrix(nrow=length(complete.ld.ll.rhythmic.genes),ncol=15)
-rownames(circacompare.ld.ll) <- complete.ld.ll.rhythmic.genes
-
-for(i in 1:length(complete.ld.ll.rhythmic.genes))
-{
-  gene.i <- complete.ld.ll.rhythmic.genes[i]
-  ld.expression.i <- ld.ll.gene.expression[gene.i,c(paste(ld.zt,2,sep="_"))]
-  ll.expression.i <- ld.ll.gene.expression[gene.i,c(paste(ld.zt,3,sep="_"))]
-  
-  time.points <- seq(from=0,by=4,length.out = 6)
-  
-  ld.ll.df <- data.frame(time=c(time.points,time.points),
-                         measure=c(ld.expression.i, ll.expression.i),
-                         group=c(rep("ld",6),rep("ll",6)))
-  
-  out.i <- circacompare(x = ld.ll.df, col_time = "time", col_group = "group", col_outcome = "measure",alpha_threshold = 1)
-  circacompare.ld.ll[i,] <- out.i[[2]][,2]
-}
-
-colnames(circacompare.ld.ll) <- out.i[[2]][,1]
-write.table(circacompare.ld.ll, file = "circacompare_ld_ll.tsv", sep="\t",row.names = T)
-
-#Amplitude
-boxplot(circacompare.ld.ll[,"ld amplitude estimate" ],
-        circacompare.ld.ll[,"ll amplitude estimate" ],outline=F,
-        col=c("royalblue3","lightblue"),names=c("LD","LL"),cex.axis=1.5, main="Distribution of amplitude")
-sum(circacompare.ld.ll[,"Amplitude difference estimate" ] < 0)
-sum(circacompare.ld.ll[,"Amplitude difference estimate" ] < 0) / length(complete.ld.ll.rhythmic.genes)
-sum(circacompare.ld.ll[,"P-value for amplitude difference" ] < 0.05)
-sum(circacompare.ld.ll[,"P-value for amplitude difference" ] < 0.05)/length(complete.ld.ll.rhythmic.genes)
-
-#Mesor
-boxplot(circacompare.ld.ll[,"ld mesor estimate" ],
-        circacompare.ld.ll[,"ll mesor estimate" ],outline=F,
-        col=c("royalblue3","lightblue"),names=c("LD","LL"),cex.axis=1.5, main="Distribution of mesor")
-sum(circacompare.ld.ll[,"Mesor difference estimate" ] < 0)
-sum(circacompare.ld.ll[,"Mesor difference estimate" ] < 0) / length(complete.ld.ll.rhythmic.genes)
-sum(circacompare.ld.ll[,"P-value for mesor difference"] < 0.05)
-sum(circacompare.ld.ll[,"P-value for mesor difference" ] < 0.05)/length(complete.ld.ll.rhythmic.genes)
-
-#Phase
-boxplot(circacompare.ld.ll[,"ld peak time" ],circacompare.ld.ll[,"ll peak time" ],
-        outline=F,col=c("royalblue3","lightblue"),names=c("LD","LL"),cex.axis=1.5, main="Distribution of phase")
-median(circacompare.ld.ll[,"ld peak time" ])-median(circacompare.ld.ll[,"ll peak time" ])
-sum(circacompare.ld.ll[,"Phase difference estimate" ] < 0) /length(complete.ld.ll.rhythmic.genes)
-sum(circacompare.ld.ll[,"Phase difference estimate" ] > 0) /length(complete.ld.ll.rhythmic.genes)
-sum(circacompare.ld.ll[,"P-value for difference in phase" ] < 0.05)/length(complete.ld.ll.rhythmic.genes)
-sum(circacompare.ld.ll[,"P-value for difference in phase" ] < 0.05)
-
-
-##### SD-LL
-circacompare.sd.ll <- matrix(nrow=length(complete.sd.ll.rhythmic.genes),ncol=15)
-rownames(circacompare.sd.ll) <- complete.sd.ll.rhythmic.genes
-
-for(i in 1:length(complete.sd.ll.rhythmic.genes))
-{
-  gene.i <- complete.sd.ll.rhythmic.genes[i]
-  
-  sd.expression.i <- sd.ll.gene.expression[gene.i,c(paste(sd.zt,2,sep="_"))]
-  ll.expression.i <- sd.ll.gene.expression[gene.i,c(paste(sd.zt,3,sep="_"))]
-  
-  time.points <- seq(from=0,by=4,length.out = 6)
-  
-  sd.ll.df <- data.frame(time=c(time.points,time.points),
-                         measure=c(sd.expression.i, ll.expression.i),
-                         group=c(rep("sd",6),rep("ll",6)))
-  
-  out.i <- circacompare(x = sd.ll.df, col_time = "time", col_group = "group", col_outcome = "measure",alpha_threshold = 1)
-  circacompare.sd.ll[i,] <- out.i[[2]][,2]
-}
-
-colnames(circacompare.sd.ll) <- out.i[[2]][,1]
-write.table(circacompare.sd.ll, file = "circacompare_sd_ll.tsv", sep="\t",row.names = T)
-
-#Amplitude
-boxplot(circacompare.sd.ll[,"sd amplitude estimate" ],
-        circacompare.sd.ll[,"ll amplitude estimate" ],outline=F,
-        col=c("tomato3","lightpink"),names=c("SD","LL"),cex.axis=1.5, main="Distribution of amplitude")
-
-sum(circacompare.sd.ll[,"Amplitude difference estimate" ] < 0)
-sum(circacompare.sd.ll[,"Amplitude difference estimate" ] < 0) / length(complete.sd.ll.rhythmic.genes)
-sum(circacompare.sd.ll[,"P-value for amplitude difference" ] < 0.05)
-sum(circacompare.sd.ll[,"P-value for amplitude difference" ] < 0.05)/length(complete.sd.ll.rhythmic.genes)
-
-#Mesor
-boxplot(circacompare.sd.ll[,"sd mesor estimate" ],
-        circacompare.sd.ll[,"ll mesor estimate" ],outline=F,
-        col=c("tomato3","lightpink"),names=c("SD","LL"),cex.axis=1.5, main="Distribution of mesor")
-sum(circacompare.sd.ll[,"Mesor difference estimate" ] < 0)
-sum(circacompare.sd.ll[,"Mesor difference estimate" ] < 0) / length(complete.sd.ll.rhythmic.genes)
-sum(circacompare.sd.ll[,"P-value for mesor difference" ] < 0.05)
-sum(circacompare.sd.ll[,"P-value for mesor difference" ] < 0.05)/length(complete.sd.ll.rhythmic.genes)
-
-#Phase
-boxplot(circacompare.sd.ll[,"sd peak time" ],circacompare.sd.ll[,"ll peak time" ],
-        outline=F,col=c("tomato3","lightpink"),names=c("SD","LL"),cex.axis=1.5, main="Distribution of phase")
-median(circacompare.sd.ll[,"sd peak time" ])-median(circacompare.sd.ll[,"ll peak time" ])
-sum(circacompare.sd.ll[,"Phase difference estimate" ] < 0) /length(complete.sd.ll.rhythmic.genes)
-sum(circacompare.sd.ll[,"Phase difference estimate" ] > 0) /length(complete.sd.ll.rhythmic.genes)
-sum(circacompare.sd.ll[,"P-value for difference in phase" ] < 0.05)/length(complete.sd.ll.rhythmic.genes)
-sum(circacompare.sd.ll[,"P-value for difference in phase" ] < 0.05)
-
-
-#Representative phase-changing genes between LD and SD conditions
-prueba1.df <- data.frame(time=c(seq(from=0,by=4,length.out = 12),seq(from=0,by=4,length.out = 12)),
-                         measure=c(genes.expression["Mp1g00120",c(paste(ld.zt,1,sep="_"),paste(ld.zt,2,sep="_"))],
-                                   genes.expression["Mp1g00120",c(paste(sd.zt,1,sep="_"),paste(sd.zt,2,sep="_"))]),
-                         group=c(rep("ld",12),rep("sd",12)))
-prueba1 <- circacompare(x = prueba1.df, col_time = "time", col_group = "group", 
-                        col_outcome = "measure",alpha_threshold = 0.05)
-prueba1[[1]]
-
-prueba2.df <- data.frame(time=c(seq(from=0,by=4,length.out = 12),seq(from=0,by=4,length.out = 12)),
-                         measure=c(genes.expression["Mp1g01050",c(paste(ld.zt,1,sep="_"),paste(ld.zt,2,sep="_"))],
-                                   genes.expression["Mp1g01050",c(paste(sd.zt,1,sep="_"),paste(sd.zt,2,sep="_"))]),
-                         group=c(rep("ld",12),rep("sd",12)))
-prueba2 <- circacompare(x = prueba2.df, col_time = "time", col_group = "group", 
-                        col_outcome = "measure",alpha_threshold = 0.05)
-prueba2[[1]]
-
-#Representative non phase-changing genes between LD and SD conditions
-prueba3.df <- data.frame(time=c(seq(from=0,by=4,length.out = 12),seq(from=0,by=4,length.out = 12)),
-                         measure=c(genes.expression["Mp2g01260",c(paste(ld.zt,1,sep="_"),paste(ld.zt,2,sep="_"))],
-                                   genes.expression["Mp2g01260",c(paste(sd.zt,1,sep="_"),paste(sd.zt,2,sep="_"))]),
-                         group=c(rep("ld",12),rep("sd",12)))
-prueba3 <- circacompare(x = prueba3.df, col_time = "time", col_group = "group", 
-                        col_outcome = "measure",alpha_threshold = 0.05)
-prueba3[[1]]
-
-
-####Circadian, light-responsive and darkness-responsive in LD
-library(circacompare)
-
-circacompare.ld.ll.resp <- matrix(nrow=length(ld.responsive),ncol=15)
-rownames(circacompare.ld.ll.resp) <- ld.responsive
-
-for(i in 1:length(ld.responsive))
-{
-  gene.i <- ld.responsive[i]
-  
-  ld.expression.i.resp <- ld.ll.gene.expression[gene.i,c(paste(ld.zt,2,sep="_"))]
-  ll.expression.i.resp <- ld.ll.gene.expression[gene.i,c(paste(ld.zt,3,sep="_"))]
-  
-  time.points <- seq(from=0,by=4,length.out = 6)
-  
-  ld.ll.df.resp <- data.frame(time=c(time.points,time.points),
-                         measure=c(ld.expression.i.resp, ll.expression.i.resp),
-                         group=c(rep("ld",6),rep("ll",6)))
-  
-  out.i <- circacompare(x = ld.ll.df.resp, col_time = "time", col_group = "group", col_outcome = "measure",alpha_threshold = 1)
-  circacompare.ld.ll.resp[i,] <- out.i[[2]][,2]
-}
-colnames(circacompare.ld.ll.resp) <- out.i[[2]][,1]
-nrow(circacompare.ld.ll.resp)
-ld.light.resp <- subset(circacompare.ld.ll.resp, circacompare.ld.ll.resp[,"Mesor difference estimate" ] > 0)
-nrow(ld.light.resp)
-ld.dark.resp <- subset(circacompare.ld.ll.resp, circacompare.ld.ll.resp[,"Mesor difference estimate" ] < 0)
-nrow(ld.dark.resp)
-
-data.ld.ll.resp <- matrix(c(length(complete.ld.ll.rhythmic.genes),nrow(ld.light.resp),nrow(ld.dark.resp),length(non.rhythmic.ld.genes)),nrow=4)
-
-barplot(data.ld.ll.resp, lwd=3, names.arg = "",cex.names = 2,cex.axis = 1.5,
-        col=c("blue","purple","lightblue","white"), 
-        border="black", width = 0.2, xlim = c(0,1),
-        font.axis=2, main = "LD-LL rhythmic genes", legend.text = c("Circadian", "Inducted by light", "Repressed by light", "Non rhythmic"),
-        xlab="",ylim=c(0,25000))
-
-non.expressed.genes.ld <- which(apply(X = genes.expression[, c(ld.zt.i)],MARGIN = 1,FUN = max) < 1)
-length(non.expressed.genes.ld)
-non.expressed.genes.ld.names <- names(non.expressed.genes.ld)
-
-data.ld.ll.resp <- matrix(c(length(complete.ld.ll.rhythmic.genes),nrow(ld.light.resp),nrow(ld.dark.resp),
-                            length(setdiff(non.rhythmic.ld.genes,non.expressed.genes.ld.names))),nrow=4)
-par(lwd=3)
-barplot(data.ld.ll.resp, lwd=3, names.arg = "",cex.names = 2,cex.axis = 1.5,
-        col=c("blue","purple","lightblue","white"), 
-        border="black", width = 0.2, xlim = c(0,1),
-        font.axis=2, main = "LD rhythmic genes", legend.text = c("Circadian", "Inducted by light", "Repressed by light", "Non rhythmic"),
-        xlab="",ylim=c(0,25000))
-
-
-write(non.expressed.genes.ld.names, file = "gene_lists/no_exp_ld_genes.txt")
-write(setdiff(non.rhythmic.ld.genes,non.expressed.genes.ld.names), file = "gene_lists/exp_but_no_rhythmic_ld_genes.txt")
-write(rownames(ld.light.resp), file = "gene_lists/light_ind_ld_genes.txt")
-write(rownames(ld.dark.resp), file = "gene_lists/light_rep_ld_genes.txt")
-write(complete.ld.ll.rhythmic.genes, file = "gene_lists/circadian_ld_genes.txt")
-
-####Circadian, light-responsive and darkness-responsive in SD
-circacompare.sd.ll.resp <- matrix(nrow=length(sd.responsive),ncol=15)
-rownames(circacompare.sd.ll.resp) <- sd.responsive
-
-for(i in 1:length(sd.responsive))
-{
-  gene.i <- sd.responsive[i]
-  
-  sd.expression.i <- sd.ll.gene.expression[gene.i,c(paste(sd.zt,2,sep="_"))]
-  ll.expression.i <- sd.ll.gene.expression[gene.i,c(paste(sd.zt,3,sep="_"))]
-  sd.ll.vector <- c(sd.expression.i,ll.expression.i)
-  
-  if ((sum(sd.ll.vector[1:6] == 0) != 6) && (sum(sd.ll.vector[7:12] == 0)) != 6)
-  {
-    time.points <- seq(from=0,by=4,length.out = 6)
-    
-    sd.ll.df <- data.frame(time=c(time.points,time.points),
-                           measure=sd.ll.vector,
-                           group=c(rep("sd",6),rep("ll",6)))
-    
-    out.i <- circacompare(x = sd.ll.df, col_time = "time", col_group = "group",
-                          col_outcome = "measure",alpha_threshold = 1 )
-    circacompare.sd.ll.resp[i,] <- out.i[[2]][,2]
-  }
-  else
-  {
-    circacompare.sd.ll.resp[i,] <- NA
-  }
-}
-colnames(circacompare.sd.ll.resp) <- out.i[[2]][,1]
-nrow(circacompare.sd.ll.resp)
-# <0 for response to light because the mesor difference in this case corresponds to sd-ll
-sd.light.resp <- subset(circacompare.sd.ll.resp, circacompare.sd.ll.resp[,"Mesor difference estimate" ] < 0) 
-nrow(sd.light.resp)
-sd.dark.resp <- subset(circacompare.sd.ll.resp, circacompare.sd.ll.resp[,"Mesor difference estimate" ] > 0)
-nrow(sd.dark.resp)
-sd.na.resp <- subset(circacompare.sd.ll.resp, is.na(circacompare.sd.ll.resp[,"Mesor difference estimate" ]))
-nrow(sd.na.resp)
-
-data.sd.ll.resp <- matrix(c(length(complete.sd.ll.rhythmic.genes),nrow(sd.light.resp),nrow(sd.dark.resp),length(non.rhythmic.sd.genes)),nrow=4)
-
-par(lwd=3)
-barplot(data.sd.ll.resp, lwd=3, names.arg = "",cex.names = 2,cex.axis = 1.5,
-        col=c("red","tomato","orange","white"), 
-        border="black", width = 0.2, xlim = c(0,1),
-        font.axis=2, main = "SD-LL rhythmic genes", legend.text = c("Circadian", "Inducted by light", "Repressed by light", "Non rhythmic"),
-        xlab="",ylim=c(0,25000))
-
-non.expressed.genes.sd <- which(apply(X = genes.expression[, c(sd.zt.i)],MARGIN = 1,FUN = max) < 1)
-length(non.expressed.genes.sd)
-non.expressed.genes.sd.names <- names(non.expressed.genes.sd)
-
-data.sd.ll.resp <- matrix(c(length(complete.sd.ll.rhythmic.genes),nrow(sd.light.resp),nrow(sd.dark.resp),
-                            length(setdiff(non.rhythmic.sd.genes,non.expressed.genes.sd.names))),nrow=4)
-par(lwd=3)
-barplot(data.sd.ll.resp, lwd=3, names.arg = "",cex.names = 2,cex.axis = 1.5,
-        col=c("red","tomato","orange","white"), 
-        border="black", width = 0.2, xlim = c(0,1),
-        font.axis=2, main = "SD rhythmic genes", legend.text = c("Circadian", "Inducted by light", "Repressed by light", "Non rhythmic"),
-        xlab="",ylim=c(0,25000))
-
-write(non.expressed.genes.sd.names, file = "gene_lists/no_exp_sd_genes.txt")
-write(setdiff(non.rhythmic.sd.genes,non.expressed.genes.sd.names), file = "gene_lists/exp_but_no_rhythmic_sd_genes.txt")
-write(rownames(sd.light.resp), file = "gene_lists/light_ind_sd_genes.txt")
-write(rownames(sd.dark.resp), file = "gene_lists/light_rep_sd_genes.txt")
-write(complete.sd.ll.rhythmic.genes, file = "gene_lists/circadian_sd_genes.txt")
-
-#### Clustering of rhythmic genes by the ZT at which they show their expression peak
-
-#Function to determine the expression peak and troughs of a gene
-classify.genes <- function(rain.results, gene.set)
-{
-  circadian.rain.results <- rain.results[gene.set,]
-  
-  gene.peaks <- circadian.rain.results$phase - 4
-  gene.troughs <- (gene.peaks + circadian.rain.results$peak.shape) %% 24
-  
-  return(data.frame(gene=gene.set,peak=gene.peaks,trough=gene.troughs,stringsAsFactors = F))
-}
-
-#Function to make clusters according to the ZT at which the genes show their peak expression
-#and another dividing those previous clusters by the troughs of the genes
-clusters <- function(rain.results, gene.set, photoperiod)
-{
-  classified.genes <- classify.genes(rain.results,gene.set)
-  
-  peaks <- seq(from=0,to=20,by=4)
-  
-  for(i in 1:length(peaks))
-  {
-    file.name <- paste(c(photoperiod,"peak_clusters/cluster_ZT",peaks[i],".txt"),collapse = "")
-    write.table(x = subset(classified.genes, peak == peaks[i])$gene,file = file.name,quote = F,row.names = F,col.names = F)
-  }
-  
-  peaks <- troughs <- seq(from=0,to=20,by=4)
-  
-  indices <- 1:length(peaks)
-  
-  for(i in indices)
-  {
-    current.peak <- peaks[i]
-    for (j in indices[-i])
-    {
-      current.trough <- troughs[j]
-      file.name <- paste(c(photoperiod,"peak_trough_clusters/cluster_peak_ZT",current.peak,"_trough_ZT",
-                           current.trough,".txt"),collapse="")
-      write.table(x = subset(classified.genes, peak == current.peak & trough == current.trough)$gene,
-                  file = file.name,quote = F,row.names = F,col.names = F)
-    }
-  }
-}
-
-#Clusters for rhythmic genes in LD with a 24h period
-clusters(rain.results = results.ld,gene.set = rhythmic.genes.ld,photoperiod = "LD")
-
-#Clusters for rhythmic genes in SD with a 24h period
-clusters(rain.results = results.sd,gene.set = rhythmic.genes.sd,photoperiod = "SD")
-
-#Clusters for rhythmic genes in LD with a 12h period
-clusters(rain.results = results.ld.12,gene.set = rhythmic.genes.ld.12,photoperiod = "LD_double")
-
-#Clusters for rhythmic genes in SD with a 12h period
-clusters(rain.results = results.sd.12,gene.set = rhythmic.genes.sd.12,photoperiod = "SD_double")
-
-## Clusters plots
-
-#24h period rhythmic genes
-cluster.LD.ZT00<-read.table("LDpeak_clusters/cluster_ZT0.txt")
-vector.LD.ZT00<-as.vector(cluster.LD.ZT00$V1)
-cluster.LD.ZT04<-read.table("LDpeak_clusters/cluster_ZT4.txt")
-vector.LD.ZT04<-as.vector(cluster.LD.ZT04$V1)
-cluster.LD.ZT08<-read.table("LDpeak_clusters/cluster_ZT8.txt")
-vector.LD.ZT08<-as.vector(cluster.LD.ZT08$V1)
-cluster.LD.ZT12<-read.table("LDpeak_clusters/cluster_ZT12.txt")
-vector.LD.ZT12<-as.vector(cluster.LD.ZT12$V1)
-cluster.LD.ZT16<-read.table("LDpeak_clusters/cluster_ZT16.txt")
-vector.LD.ZT16<-as.vector(cluster.LD.ZT16$V1)
-cluster.LD.ZT20<-read.table("LDpeak_clusters/cluster_ZT20.txt")
-vector.LD.ZT20<-as.vector(cluster.LD.ZT20$V1)
-cluster.SD.ZT00<-read.table("SDpeak_clusters/cluster_ZT0.txt")
-vector.SD.ZT00<-as.vector(cluster.SD.ZT00$V1)
-cluster.SD.ZT04<-read.table("SDpeak_clusters/cluster_ZT4.txt")
-vector.SD.ZT04<-as.vector(cluster.SD.ZT04$V1)
-cluster.SD.ZT08<-read.table("SDpeak_clusters/cluster_ZT8.txt")
-vector.SD.ZT08<-as.vector(cluster.SD.ZT08$V1)
-cluster.SD.ZT12<-read.table("SDpeak_clusters/cluster_ZT12.txt")
-vector.SD.ZT12<-as.vector(cluster.SD.ZT12$V1)
-cluster.SD.ZT16<-read.table("SDpeak_clusters/cluster_ZT16.txt")
-vector.SD.ZT16<-as.vector(cluster.SD.ZT16$V1)
-cluster.SD.ZT20<-read.table("SDpeak_clusters/cluster_ZT20.txt")
-vector.SD.ZT20<-as.vector(cluster.SD.ZT20$V1)
-
-clusters.bars <- matrix(c(length(vector.LD.ZT00),length(vector.LD.ZT04),length(vector.LD.ZT08),
-                          length(vector.LD.ZT12),length(vector.LD.ZT16),length(vector.LD.ZT20), 
-                          length(vector.SD.ZT00),length(vector.SD.ZT04),length(vector.SD.ZT08),
-                          length(vector.SD.ZT12),length(vector.SD.ZT16),length(vector.SD.ZT20)),nrow=6)
-
-barplot(clusters.bars, lwd=2, names.arg = c("LD","SD"),cex.names = 2,cex.axis = 1.5, width = 0.35, xlim = c(0,2),
-        col=c("gray","darkolivegreen1","darkolivegreen2","darkolivegreen3","darkolivegreen4","darkolivegreen"),
-        border="black", space=0.25, font.axis=2, xlab="", ylim=c(0,7000), legend.text = c("ZT00","ZT04","ZT08","ZT12","ZT16","ZT20"),
-        main = "Number of genes per cluster")
-
-#12h period rhythmic genes
-cluster.LD.double.ZT00<-read.table("LD_doublepeak_clusters/cluster_ZT0.txt")
-vector.LD.double.ZT00<-as.vector(cluster.LD.double.ZT00$V1)
-cluster.LD.double.ZT04<-read.table("LD_doublepeak_clusters/cluster_ZT4.txt")
-vector.LD.double.ZT04<-as.vector(cluster.LD.double.ZT04$V1)
-cluster.LD.double.ZT08<-read.table("LD_doublepeak_clusters/cluster_ZT8.txt")
-vector.LD.double.ZT08<-as.vector(cluster.LD.double.ZT08$V1)
-cluster.SD.double.ZT00<-read.table("SD_doublepeak_clusters/cluster_ZT0.txt")
-vector.SD.double.ZT00<-as.vector(cluster.SD.double.ZT00$V1)
-cluster.SD.double.ZT04<-read.table("SD_doublepeak_clusters/cluster_ZT4.txt")
-vector.SD.double.ZT04<-as.vector(cluster.SD.double.ZT04$V1)
-cluster.SD.double.ZT08<-read.table("SD_doublepeak_clusters/cluster_ZT8.txt")
-vector.SD.double.ZT08<-as.vector(cluster.SD.double.ZT08$V1)
-
-clusters.double.bars <- matrix(c(length(vector.LD.double.ZT00),length(vector.LD.double.ZT04),
-                                 length(vector.LD.double.ZT08),length(vector.SD.double.ZT00),
-                                 length(vector.SD.double.ZT04),length(vector.SD.double.ZT08)),nrow=3)
-
-barplot(clusters.double.bars, lwd=2, names.arg = c("LD","SD"),cex.names = 2,cex.axis = 1.5, width = 0.35, xlim = c(0,2),
-        col=c("darkolivegreen1","darkolivegreen3","darkolivegreen"),
-        border="black", space=0.25, font.axis=2, xlab="", ylim=c(0,3000), legend.text = c("ZT00","ZT04","ZT08"),
-        main = "Number of genes per cluster")
-
-##Circacompare histograms##
-head(circacompare.ld.sd)
-head(circacompare.ld.sd.total)
-
-length(rain.ld.rhythmic.genes)
-length(intersect(rain.ld.rhythmic.genes, rownames(circacompare.ld.sd.total)))
-rhythmic.for.circa.ld <- intersect(rain.ld.rhythmic.genes, rownames(circacompare.ld.sd.total))
-
-length(rain.sd.rhythmic.genes)
-length(intersect(rain.sd.rhythmic.genes, rownames(circacompare.ld.sd.total)))
-rhythmic.for.circa.sd <- intersect(rain.sd.rhythmic.genes, rownames(circacompare.ld.sd.total))
-
-circacompare.ld.rhythmic.peaks <- circacompare.ld.sd.total[rhythmic.for.circa.ld,12]
-head(circacompare.ld.rhythmic.peaks)
-
-circacompare.sd.rhythmic.peaks <- circacompare.ld.sd.total[rhythmic.for.circa.sd,13]
-head(circacompare.sd.rhythmic.peaks)
-
-par(lwd=2)
-hist(circacompare.ld.rhythmic.peaks, freq = T, col = "blue", xlim = c(0,24), lwd= 2, xaxt='n',
-     main= "Pico de expresión de los genes rítmicos en LD", xlab= "Tiempo Zeitberg", ylab= "Número de genes", yaxt='n')
-axis(side=1, at=seq(0,24,4), seq(0,24,4), lwd=2)
-axis(side=2, at=seq(0,900,300), seq(0,900,300), lwd=2)
-abline(v=16, col="black", lwd=5, lty = 2)
-
-par(lwd=2)
-hist(circacompare.sd.rhythmic.peaks, freq = T, col = "red", xlim = c(0,24), lwd= 2, xaxt='n',
-     main= "Pico de expresión de los genes rítmicos en SD", xlab= "Tiempo Zeitberg", yaxt='n', ylab= "Número de genes")
-axis(side=1, at=seq(0,24,4), seq(0,24,4), lwd=2)
-axis(side=2, at=seq(0,1200,300), seq(0,1200,300), lwd=2)
-abline(v=8, col="black", lwd=5, lty = 2)
-
-
-
-#### FUNCTIONAL ANALYSIS ####
-
-#### GO terms enrichment 
-library("clusterProfiler")
-
-#Install our annotation package for Marchantia polymorpha
-#install.packages("./org.Mpolymorpha.eg.db/", repos=NULL, type="source")
-library("org.Mpolymorpha.eg.db")
-columns(org.Mpolymorpha.eg.db)
-
-
-#mp.universe <- unique(select(org.Mpolymorpha.eg.db,columns = c("GO"),keys=keys(org.Mpolymorpha.eg.db,keytype = "GID"))[["GID"]])
-#length(mp.universe)
-
-#SD
-#Cluster ZT00 SD
-cluster.ZT00.SD<-read.table("SDpeak_clusters/cluster_ZT0.txt")
-cluster.ZT00.SD<-as.vector(cluster.ZT00.SD$V1)
-
-ego.ZT00.SD <- enrichGO(gene = unique(cluster.ZT00.SD),
-                        OrgDb         = org.Mpolymorpha.eg.db,
-                        ont           = "BP",
-                        pAdjustMethod = "BH",
-                        pvalueCutoff  = 0.05,
-                        qvalueCutoff  = 0.05,
-                        readable      = TRUE,
-                        keyType = "GID")
-
-barplot(ego.ZT00.SD, title = "SD ZT00")
-
-#Cluster ZT04 SD
-cluster.ZT04.SD<-read.table("SDpeak_clusters/cluster_ZT4.txt")
-cluster.ZT04.SD<-as.vector(cluster.ZT04.SD$V1)
-
-ego.ZT04.SD <- enrichGO(gene = unique(cluster.ZT04.SD),
-                        OrgDb         = org.Mpolymorpha.eg.db,
-                        ont           = "BP",
-                        pAdjustMethod = "BH",
-                        pvalueCutoff  = 0.05,
-                        qvalueCutoff  = 0.05,
-                        readable      = TRUE,
-                        keyType = "GID")
-
-barplot(ego.ZT04.SD, title = "SD ZT04")
-
-#Cluster ZT08 SD
-cluster.ZT08.SD<-read.table("SDpeak_clusters/cluster_ZT8.txt")
-cluster.ZT08.SD<-as.vector(cluster.ZT08.SD$V1)
-
-ego.ZT08.SD <- enrichGO(gene = unique(cluster.ZT08.SD),
-                OrgDb         = org.Mpolymorpha.eg.db,
-                ont           = "BP",
-                pAdjustMethod = "BH",
-                pvalueCutoff  = 0.05,
-                qvalueCutoff  = 0.05,
-                readable      = TRUE,
-                keyType = "GID")
-
-barplot(ego.ZT08.SD, title = "SD ZT08")
-
-#Cluster ZT12 SD
-cluster.ZT12.SD<-read.table("SDpeak_clusters/cluster_ZT12.txt")
-cluster.ZT12.SD<-as.vector(cluster.ZT12.SD$V1)
-
-ego.ZT12.SD <- enrichGO(gene = unique(cluster.ZT12.SD),
-                        OrgDb         = org.Mpolymorpha.eg.db,
-                        ont           = "BP",
-                        pAdjustMethod = "BH",
-                        pvalueCutoff  = 0.05,
-                        qvalueCutoff  = 0.05,
-                        readable      = TRUE,
-                        keyType = "GID")
-
-barplot(ego.ZT12.SD, title = "SD ZT12")
-
-#Cluster ZT16 SD
-cluster.ZT16.SD<-read.table("SDpeak_clusters/cluster_ZT16.txt")
-cluster.ZT16.SD<-as.vector(cluster.ZT16.SD$V1)
-
-ego.ZT16.SD <- enrichGO(gene = unique(cluster.ZT16.SD),
-                        OrgDb         = org.Mpolymorpha.eg.db,
-                        ont           = "BP",
-                        pAdjustMethod = "BH",
-                        pvalueCutoff  = 0.05,
-                        qvalueCutoff  = 0.05,
-                        readable      = TRUE,
-                        keyType = "GID")
-
-barplot(ego.ZT16.SD, title = "SD ZT16")
-
-#Cluster ZT20 SD
-cluster.ZT20.SD<-read.table("SDpeak_clusters/cluster_ZT20.txt")
-cluster.ZT20.SD<-as.vector(cluster.ZT20.SD$V1)
-
-ego.ZT20.SD <- enrichGO(gene = unique(cluster.ZT20.SD),
-                        OrgDb         = org.Mpolymorpha.eg.db,
-                        ont           = "BP",
-                        pAdjustMethod = "BH",
-                        pvalueCutoff  = 0.05,
-                        qvalueCutoff  = 0.05,
-                        readable      = TRUE,
-                        keyType = "GID")
-
-barplot(ego.ZT20.SD, title = "SD ZT20")
-
-#LD
-#Cluster ZT00 LD
-cluster.ZT00.LD<-read.table("LDpeak_clusters/cluster_ZT0.txt")
-cluster.ZT00.LD<-as.vector(cluster.ZT00.LD$V1)
-
-ego.ZT00.LD <- enrichGO(gene = unique(cluster.ZT00.LD),
-                        OrgDb         = org.Mpolymorpha.eg.db,
-                        ont           = "BP",
-                        pAdjustMethod = "BH",
-                        pvalueCutoff  = 0.05,
-                        qvalueCutoff  = 0.05,
-                        readable      = TRUE,
-                        keyType = "GID")
-
-barplot(ego.ZT00.LD, title = "LD ZT00")
-
-#Cluster ZT04 LD
-cluster.ZT04.LD<-read.table("LDpeak_clusters/cluster_ZT4.txt")
-cluster.ZT04.LD<-as.vector(cluster.ZT04.LD$V1)
-
-ego.ZT04.LD <- enrichGO(gene = unique(cluster.ZT04.LD),
-                        OrgDb         = org.Mpolymorpha.eg.db,
-                        ont           = "BP",
-                        pAdjustMethod = "BH",
-                        pvalueCutoff  = 0.05,
-                        qvalueCutoff  = 0.05,
-                        readable      = TRUE,
-                        keyType = "GID")
-
-barplot(ego.ZT04.LD, title = "LD ZT04")
-
-#Cluster ZT08 LD
-cluster.ZT08.LD<-read.table("LDpeak_clusters/cluster_ZT8.txt")
-cluster.ZT08.LD<-as.vector(cluster.ZT08.LD$V1)
-
-ego.ZT08.LD <- enrichGO(gene = unique(cluster.ZT08.LD),
-                        OrgDb         = org.Mpolymorpha.eg.db,
-                        ont           = "BP",
-                        pAdjustMethod = "BH",
-                        pvalueCutoff  = 0.05,
-                        qvalueCutoff  = 0.05,
-                        readable      = TRUE,
-                        keyType = "GID")
-
-barplot(ego.ZT08.LD, title = "LD ZT08")
-
-#Cluster ZT12 LD
-cluster.ZT12.LD<-read.table("LDpeak_clusters/cluster_ZT12.txt")
-cluster.ZT12.LD<-as.vector(cluster.ZT12.LD$V1)
-
-ego.ZT12.LD <- enrichGO(gene = unique(cluster.ZT12.LD),
-                        OrgDb         = org.Mpolymorpha.eg.db,
-                        ont           = "BP",
-                        pAdjustMethod = "BH",
-                        pvalueCutoff  = 0.05,
-                        qvalueCutoff  = 0.05,
-                        readable      = TRUE,
-                        keyType = "GID")
-
-barplot(ego.ZT12.LD,title = "LD ZT12")
-
-#Cluster ZT16 LD
-cluster.ZT16.LD<-read.table("LDpeak_clusters/cluster_ZT16.txt")
-cluster.ZT16.LD<-as.vector(cluster.ZT16.LD$V1)
-
-ego.ZT16.LD <- enrichGO(gene = unique(cluster.ZT16.LD),
-                        OrgDb         = org.Mpolymorpha.eg.db,
-                        ont           = "BP",
-                        pAdjustMethod = "BH",
-                        pvalueCutoff  = 0.05,
-                        qvalueCutoff  = 0.05,
-                        readable      = TRUE,
-                        keyType = "GID")
-
-barplot(ego.ZT16.LD, title = "LD ZT16")
-
-#Cluster ZT20 LD
-cluster.ZT20.LD<-read.table("LDpeak_clusters/cluster_ZT20.txt")
-cluster.ZT20.LD<-as.vector(cluster.ZT20.LD$V1)
-
-ego.ZT20.LD <- enrichGO(gene = unique(cluster.ZT20.LD),
-                        OrgDb         = org.Mpolymorpha.eg.db,
-                        ont           = "BP",
-                        pAdjustMethod = "BH",
-                        pvalueCutoff  = 0.05,
-                        qvalueCutoff  = 0.05,
-                        readable      = TRUE,
-                        keyType = "GID")
-
-barplot(ego.ZT20.LD, title = "LD ZT20")
-
-
-#### GO terms enrichment based in orthologs of Arabidopsis thaliana
-library(org.Mpolymorpha.eg.db)
-
-ath_orth <- as.vector(select(org.Mpolymorpha.eg.db,columns = c("ATH_ORTH"),keys=keys(org.Mpolymorpha.eg.db,keytype = "GID"))$ATH_ORTH)
-names(ath_orth) <- as.vector(select(org.Mpolymorpha.eg.db,columns = c("ATH_ORTH"),keys=keys(org.Mpolymorpha.eg.db,keytype = "GID"))$GID)
-head(ath_orth)
-
-#LD
-#Cluster ZT00 LD
-
-cluster.ZT00.LD<-read.table("LDpeak_clusters/cluster_ZT0.txt")
-cluster.ZT00.LD<-as.vector(cluster.ZT00.LD$V1)
-head (cluster.ZT00.LD)
-ZT00.arabi <-ath_orth[cluster.ZT00.LD]
-ZT00.arabi <- ZT00.arabi[!(is.na(ZT00.arabi))]
-names(ZT00.arabi) <- NULL
-ZT00.arabi
-ZT00.arabi <- ZT00.arabi[ZT00.arabi != ""]
-ZT00.arabi
-
-library("org.At.tair.db")
-ego.ZT00.LD.ath <- enrichGO(gene = unique(ZT00.arabi),
-                        OrgDb         = org.At.tair.db,
-                        ont           = "BP",
-                        pAdjustMethod = "BH",
-                        pvalueCutoff  = 0.05,
-                        qvalueCutoff  = 0.05,
-                        readable      = FALSE,
-                        keyType = "TAIR")
-barplot(ego.ZT00.LD.ath, showCategory = 30)
-
-#Cluster ZT04 LD
-ZT04.arabi <-ath_orth[cluster.ZT04.LD]
-ZT04.arabi <- ZT04.arabi[!(is.na(ZT04.arabi))]
-names(ZT04.arabi) <- NULL
-ZT04.arabi
-ZT04.arabi <- ZT04.arabi[ZT04.arabi != ""]
-ZT04.arabi
-ego.ZT04.LD.ath <- enrichGO(gene = unique(ZT04.arabi),
-                            OrgDb         = org.At.tair.db,
-                            ont           = "BP",
-                            pAdjustMethod = "BH",
-                            pvalueCutoff  = 0.05,
-                            qvalueCutoff  = 0.05,
-                            readable      = FALSE,
-                            keyType = "TAIR")
-barplot(ego.ZT04.LD.ath)
-
-#Cluster ZT08 LD
-ZT08.arabi <-ath_orth[cluster.ZT08.LD]
-ZT08.arabi <- ZT08.arabi[!(is.na(ZT08.arabi))]
-names(ZT08.arabi) <- NULL
-ZT08.arabi
-ZT08.arabi <- ZT08.arabi[ZT08.arabi != ""]
-ZT08.arabi
-ego.ZT08.LD.ath <- enrichGO(gene = unique(ZT08.arabi),
-                            OrgDb         = org.At.tair.db,
-                            ont           = "BP",
-                            pAdjustMethod = "BH",
-                            pvalueCutoff  = 0.05,
-                            qvalueCutoff  = 0.05,
-                            readable      = FALSE,
-                            keyType = "TAIR")
-barplot(ego.ZT08.LD.ath)
-
-#Cluster ZT12 LD
-ZT12.arabi <-ath_orth[cluster.ZT12.LD]
-ZT12.arabi <- ZT12.arabi[!(is.na(ZT12.arabi))]
-names(ZT12.arabi) <- NULL
-ZT12.arabi
-ZT12.arabi <- ZT12.arabi[ZT12.arabi != ""]
-ZT12.arabi
-ego.ZT12.LD.ath <- enrichGO(gene = unique(ZT12.arabi),
-                            OrgDb         = org.At.tair.db,
-                            ont           = "BP",
-                            pAdjustMethod = "BH",
-                            pvalueCutoff  = 0.05,
-                            qvalueCutoff  = 0.05,
-                            readable      = FALSE,
-                            keyType = "TAIR")
-barplot(ego.ZT12.LD.ath)
-
-#Cluster ZT16 LD
-ZT16.arabi <-ath_orth[cluster.ZT16.LD]
-ZT16.arabi <- ZT16.arabi[!(is.na(ZT16.arabi))]
-names(ZT16.arabi) <- NULL
-ZT16.arabi
-ZT16.arabi <- ZT16.arabi[ZT16.arabi != ""]
-ZT16.arabi
-ego.ZT16.LD.ath <- enrichGO(gene = unique(ZT16.arabi),
-                            OrgDb         = org.At.tair.db,
-                            ont           = "BP",
-                            pAdjustMethod = "BH",
-                            pvalueCutoff  = 0.05,
-                            qvalueCutoff  = 0.05,
-                            readable      = FALSE,
-                            keyType = "TAIR")
-barplot(ego.ZT16.LD.ath)
-
-#Cluster ZT20 LD
-ZT20.arabi <-ath_orth[cluster.ZT20.LD]
-ZT20.arabi <- ZT20.arabi[!(is.na(ZT20.arabi))]
-names(ZT20.arabi) <- NULL
-ZT20.arabi
-ZT20.arabi <- ZT20.arabi[ZT20.arabi != ""]
-ZT20.arabi
-ego.ZT20.LD.ath <- enrichGO(gene = unique(ZT20.arabi),
-                            OrgDb         = org.At.tair.db,
-                            ont           = "BP",
-                            pAdjustMethod = "BH",
-                            pvalueCutoff  = 0.05,
-                            qvalueCutoff  = 0.05,
-                            readable      = FALSE,
-                            keyType = "TAIR")
-barplot(ego.ZT20.LD.ath)
-
-#SD
-#Cluster ZT00 SD
-ZT00.arabi.SD <-ath_orth[cluster.ZT00.SD]
-ZT00.arabi.SD <- ZT00.arabi.SD[!(is.na(ZT00.arabi.SD))]
-names(ZT00.arabi.SD) <- NULL
-ZT00.arabi.SD
-ZT00.arabi.SD <- ZT00.arabi.SD[ZT00.arabi.SD != ""]
-ZT00.arabi.SD
-ego.ZT00.SD.ath <- enrichGO(gene = unique(ZT00.arabi.SD),
-                            OrgDb         = org.At.tair.db,
-                            ont           = "BP",
-                            pAdjustMethod = "BH",
-                            pvalueCutoff  = 0.05,
-                            qvalueCutoff  = 0.05,
-                            readable      = FALSE,
-                            keyType = "TAIR")
-barplot(ego.ZT00.SD.ath)
-
-#Cluster ZT04 SD
-ZT04.arabi.SD <-ath_orth[cluster.ZT04.SD]
-ZT04.arabi.SD <- ZT04.arabi.SD[!(is.na(ZT04.arabi.SD))]
-names(ZT04.arabi.SD) <- NULL
-ZT04.arabi.SD
-ZT04.arabi.SD <- ZT04.arabi.SD[ZT04.arabi.SD != ""]
-ZT04.arabi.SD
-ego.ZT04.SD.ath <- enrichGO(gene = unique(ZT04.arabi.SD),
-                            OrgDb         = org.At.tair.db,
-                            ont           = "BP",
-                            pAdjustMethod = "BH",
-                            pvalueCutoff  = 0.05,
-                            qvalueCutoff  = 0.05,
-                            readable      = FALSE,
-                            keyType = "TAIR")
-barplot(ego.ZT04.SD.ath)
-
-#Cluster ZT08 SD
-ZT08.arabi.SD <-ath_orth[cluster.ZT08.SD]
-ZT08.arabi.SD <- ZT08.arabi.SD[!(is.na(ZT08.arabi.SD))]
-names(ZT08.arabi.SD) <- NULL
-ZT08.arabi.SD
-ZT08.arabi.SD <- ZT08.arabi.SD[ZT08.arabi.SD != ""]
-ZT08.arabi.SD
-ego.ZT08.SD.ath <- enrichGO(gene = unique(ZT08.arabi.SD),
-                            OrgDb         = org.At.tair.db,
-                            ont           = "BP",
-                            pAdjustMethod = "BH",
-                            pvalueCutoff  = 0.05,
-                            qvalueCutoff  = 0.05,
-                            readable      = FALSE,
-                            keyType = "TAIR")
-barplot(ego.ZT08.SD.ath)
-
-#Cluster ZT12 SD
-ZT12.arabi.SD <-ath_orth[cluster.ZT12.SD]
-ZT12.arabi.SD <- ZT12.arabi.SD[!(is.na(ZT12.arabi.SD))]
-names(ZT12.arabi.SD) <- NULL
-ZT12.arabi.SD
-ZT12.arabi.SD <- ZT12.arabi.SD[ZT12.arabi.SD != ""]
-ZT12.arabi.SD
-ego.ZT12.SD.ath <- enrichGO(gene = unique(ZT12.arabi.SD),
-                            OrgDb         = org.At.tair.db,
-                            ont           = "BP",
-                            pAdjustMethod = "BH",
-                            pvalueCutoff  = 0.05,
-                            qvalueCutoff  = 0.05,
-                            readable      = FALSE,
-                            keyType = "TAIR")
-barplot(ego.ZT12.SD.ath)
-
-#Cluster ZT16 SD
-ZT16.arabi.SD <-ath_orth[cluster.ZT16.SD]
-ZT16.arabi.SD <- ZT16.arabi.SD[!(is.na(ZT16.arabi.SD))]
-names(ZT16.arabi.SD) <- NULL
-ZT16.arabi.SD
-ZT16.arabi.SD <- ZT16.arabi.SD[ZT16.arabi.SD != ""]
-ZT16.arabi.SD
-ego.ZT16.SD.ath <- enrichGO(gene = unique(ZT16.arabi.SD),
-                            OrgDb         = org.At.tair.db,
-                            ont           = "BP",
-                            pAdjustMethod = "BH",
-                            pvalueCutoff  = 0.05,
-                            qvalueCutoff  = 0.05,
-                            readable      = FALSE,
-                            keyType = "TAIR")
-barplot(ego.ZT16.SD.ath)
-
-#Cluster ZT20 SD
-ZT20.arabi.SD <-ath_orth[cluster.ZT20.SD]
-ZT20.arabi.SD <- ZT20.arabi.SD[!(is.na(ZT20.arabi.SD))]
-names(ZT20.arabi.SD) <- NULL
-ZT20.arabi.SD
-ZT20.arabi.SD <- ZT20.arabi.SD[ZT20.arabi.SD != ""]
-ZT20.arabi.SD
-ego.ZT20.SD.ath <- enrichGO(gene = unique(ZT20.arabi.SD),
-                            OrgDb         = org.At.tair.db,
-                            ont           = "BP",
-                            pAdjustMethod = "BH",
-                            pvalueCutoff  = 0.05,
-                            qvalueCutoff  = 0.05,
-                            readable      = FALSE,
-                            keyType = "TAIR")
-barplot(ego.ZT20.SD.ath)
-
-#Save GO terms enrichment for M.poly genes as data frames
-data.go.sd.00 <- as.data.frame(ego.ZT00.SD)
-write.table(data.go.sd.00,file = "data.go.sd.00.tsv")
-
-data.go.sd.04 <- as.data.frame(ego.ZT04.SD)
-write.table(data.go.sd.04,file = "data.go.sd.04.tsv")
-
-data.go.sd.08 <- as.data.frame(ego.ZT08.SD)
-write.table(data.go.sd.08,file = "data.go.sd.08.tsv")
-
-data.go.sd.12 <- as.data.frame(ego.ZT12.SD)
-write.table(data.go.sd.12,file = "data.go.sd.12.tsv")
-
-data.go.sd.16 <- as.data.frame(ego.ZT16.SD)
-write.table(data.go.sd.16,file = "data.go.sd.16.tsv")
-
-data.go.sd.20 <- as.data.frame(ego.ZT20.SD)
-write.table(data.go.sd.20,file = "data.go.sd.20.tsv")
-
-data.go.ld.00 <- as.data.frame(ego.ZT00.LD)
-write.table(data.go.ld.00,file = "data.go.ld.00.tsv")
-
-data.go.ld.04 <- as.data.frame(ego.ZT04.LD)
-write.table(data.go.ld.04,file = "data.go.ld.04.tsv")
-
-data.go.ld.08 <- as.data.frame(ego.ZT08.LD)
-write.table(data.go.ld.08,file = "data.go.ld.08.tsv")
-
-data.go.ld.12 <- as.data.frame(ego.ZT12.LD)
-write.table(data.go.ld.12,file = "data.go.ld.12.tsv")
-
-data.go.ld.16 <- as.data.frame(ego.ZT16.LD)
-write.table(data.go.ld.16,file = "data.go.ld.16.tsv")
-
-data.go.ld.20 <- as.data.frame(ego.ZT20.LD)
-write.table(data.go.ld.20,file = "data.go.ld.20.tsv")
-
-
-#Save GO terms enrichment for A.thaliana orthologs as data frames
-data.go.ld.00.ath <- as.data.frame(ego.ZT00.LD.ath)
-write.table(data.go.ld.00.ath,file = "data.go.ld.00.ath.tsv")
-
-data.go.ld.04.ath <- as.data.frame(ego.ZT04.LD.ath)
-write.table(data.go.ld.04.ath,file = "data.go.ld.04.ath.tsv")
-
-data.go.ld.08.ath <- as.data.frame(ego.ZT08.LD.ath)
-write.table(data.go.ld.08.ath,file = "data.go.ld.08.ath.tsv")
-
-data.go.ld.12.ath <- as.data.frame(ego.ZT12.LD.ath)
-write.table(data.go.ld.12.ath,file = "data.go.ld.12.ath.tsv")
-
-data.go.ld.16.ath <- as.data.frame(ego.ZT16.LD.ath)
-write.table(data.go.ld.16.ath,file = "data.go.ld.16.ath.tsv")
-
-data.go.ld.20.ath <- as.data.frame(ego.ZT20.LD.ath)
-write.table(data.go.ld.20.ath,file = "data.go.ld.20.ath.tsv")
-
-data.go.sd.00.ath <- as.data.frame(ego.ZT00.SD.ath)
-write.table(data.go.sd.00.ath,file = "data.go.sd.00.ath.tsv")
-
-data.go.sd.04.ath <- as.data.frame(ego.ZT04.SD.ath)
-write.table(data.go.sd.04.ath,file = "data.go.sd.04.ath.tsv")
-
-data.go.sd.08.ath <- as.data.frame(ego.ZT08.SD.ath)
-write.table(data.go.sd.08.ath,file = "data.go.sd.08.ath.tsv")
-
-data.go.sd.12.ath <- as.data.frame(ego.ZT12.SD.ath)
-write.table(data.go.sd.12.ath,file = "data.go.sd.12.ath.tsv")
-
-data.go.sd.16.ath <- as.data.frame(ego.ZT16.SD.ath)
-write.table(data.go.sd.16.ath,file = "data.go.sd.16.ath.tsv")
-
-data.go.sd.20.ath <- as.data.frame(ego.ZT20.SD.ath)
-write.table(data.go.sd.20.ath,file = "data.go.sd.20.ath.tsv")
-
-
-#### KEGG pathways enrichment
-
-#if (!requireNamespace("BiocManager", quietly = TRUE))
-#  install.packages("BiocManager")
-#BiocManager::install("pathview")
-
-library(clusterProfiler)
-library("pathview")
-
-## KO enrichment using M.poly annotation
-annotation.table <- read.table("Marchantia_polymorpha_v5.1_final_annotation.tsv", header = T, as.is = T)
-head(annotation.table)
-dim(annotation.table)
-ko.table <- annotation.table[,c("ID5","KO")]
-head(ko.table)
-dim(ko.table)
-ko.final.table <- subset(ko.table, ko.table$KO != "")
-dim(ko.final.table)
-head(ko.final.table)
-
-ko.universe <- ko.final.table$KO
-
-for (photoperiod in c("LD","SD"))
-{
-  for (i in seq(from=0,to=20,by=4))
-  {
-    target.cluster <- paste0(photoperiod,"peak_clusters/cluster_ZT",i,".txt")
-    target.names.table <- read.table(target.cluster)
-    target.ids <- target.names.table[,1]
-    target.ko <- subset(ko.final.table, ko.final.table$ID5 %in% target.ids)$KO
-    target.ko <- target.ko[!is.na(target.ko)]
-    pathway.enrich <- as.data.frame(enrichKEGG(gene=target.ko, organism="ko", universe=ko.universe, qvalueCutoff=0.05))
-    write.table(file = paste0("KO_enrichment/KO_ZT",i,"_",photoperiod,".tsv"),pathway.enrich)
-  }
-}
-
-for (photoperiod in c("LD","SD"))
-{
-  for (i in seq(from=0,to=20,by=4))
-  {
-    target.cluster <- paste0(photoperiod,"peak_clusters/cluster_ZT",i,".txt")
-    target.names.table <- read.table(target.cluster)
-    target.ids <- target.names.table[,1]
-    target.ko <- subset(ko.final.table, ko.final.table$ID5 %in% target.ids)$KO
-    gene.pathway <- rep(0, length(ko.universe))
-    names(gene.pathway) <-  ko.universe
-    gene.pathway[target.ko] <-1
-    ko.cluster.name <- paste0("KO_enrichment/KO_ZT",i,"_",photoperiod,".tsv")
-    ko.cluster <- read.table(ko.cluster.name,header = T)
-    for (j in 1:nrow(ko.cluster))
-      {
-        pathway.current.id <- ko.cluster[j,1]
-        pathview(gene.data = sort(gene.pathway, decreasing = T), pathway.id = pathway.current.id,species = "ko",
-                 limit=list(gene=max(abs(gene.pathway)),cpd=1),gene.idtype = "kegg",
-                 kegg.dir = paste0("kegg_images/KO_ZT",i,"_",photoperiod))
-      }
-  }
-}  
-
-
-#Plots of genes involved in pathways of interest in each temporal point and photoperiod
-goi.mpoly <- read.table("../pathways_gene_correspondece.tsv",header=T, sep="\t")
-head(goi.mpoly)
-goi.mpoly.sd.ids<-goi.mpoly[,3]
-goi.mpoly.sd.ids
-
-for (i in 1:length(goi.mpoly.sd.ids))
-{
-  genes.vector <- strsplit(goi.mpoly.sd.ids[i],split = "/")[[1]]
-  if (i %in% 1:19)
-  {
-    pathway.photoperiod <- "LD"
-  }
-  else
-  {
-    pathway.photoperiod <- "SD"
-  }
-  if (i %in% c(1,2,3,20,21,22))
-  {
-    pathway.point <- "ZT00" 
-  }
-  else if (i %in% c(4,5,6,7,23,24,25,26))
-  {
-    pathway.point <- "ZT04" 
-  }
-  else if (i %in% c(8,9,10,27,28,29))
-  {
-    pathway.point <- "ZT08" 
-  }
-  else if (i %in% c(11,12,13,30,31,32))
-  {
-    pathway.point <- "ZT12" 
-  }
-  else if (i %in% c(14,15,16,33,34,35))
-  {
-    pathway.point <- "ZT16" 
-  }
-  else if (i %in% c(17,18,19,36,37,38))
-  {
-    pathway.point <- "ZT20" 
-  }
-  gene.temporal.point <- paste(pathway.photoperiod, pathway.point, sep = "_")
-  for (j in 1:length(genes.vector))
-  {
-    plot.ld.sd(gene.id = genes.vector[j],gene.name = gene.temporal.point, 
-               ld.gene.expression,sd.gene.expression)
-  }
-}
-
-## KO enrichment using A.thaliana orthologs
-library(clusterProfiler)
-library(pathview)
-library(org.At.tair.db)
-
-for (photoperiod in c("LD","SD"))
-{
-  for (i in seq(from=0,to=20,by=4))
-  {
-    target.cluster <- paste0(photoperiod,"peak_clusters/cluster_ZT",i,".txt")
-    target.names.table <- read.table(target.cluster)
-    target.vector <- as.vector(target.names.table$V1)
-    target.arabi <- ath_orth[target.vector]
-    target.arabi <- target.arabi[!(is.na(target.arabi))]
-    names(target.arabi) <- NULL
-    target.arabi <- target.arabi[target.arabi != ""]
-    pathway.enrich <- as.data.frame(enrichKEGG(gene = unique(target.arabi),
-                                   organism      = "arabidopsis",
-                                   pAdjustMethod = "BH",
-                                   pvalueCutoff  = 0.05,
-                                   qvalueCutoff  = 0.05,
-                                   keyType = "kegg"))
-    
-    write.table(file = paste0("KO_arabi/KO_ara_ZT",i,"_",photoperiod,".tsv"),pathway.enrich)
-    for (j in 1:nrow(pathway.enrich))
-    {
-      pathway.current.id <- pathway.enrich$ID[j]
-      pathview(gene.data = target.arabi, pathway.id = pathway.current.id,species = "ath",
-               gene.idtype = "TAIR", kegg.dir = paste0("kegg_images_ara/KO_ara_ZT",i,"_",photoperiod))
-    }
-  }
-}
-
-
-##CHLOROPLAST DIVISION AND ORGANIZATION##
-
-#Identifying genes associated with chloroplast division and organization based on Arabidopsis orthologs
-
-library(AnnotationForge)
-library(org.At.tair.db)
-library(org.Mpolymorpha.eg.db)
-columns(org.At.tair.db)
-columns(org.Mpolymorpha.eg.db)
-
-#GO terms for this biological processes
-chloro_go <- c("GO:0010020", "GO:0009658")
-
-head(keys(org.At.tair.db,keytype="GO"))
-
-#Selection of proper genes in Arabidopsis
-chloro_ath <- select(org.At.tair.db, keys=chloro_go, columns=c("TAIR"), keytype="GO")
-chloro_ath_vector <- chloro_ath$TAIR
-length(chloro_ath_vector)
-
-#Selection of Marchantia orthologs
-columns(org.Mpolymorpha.eg.db)
-chloro_mp <- select(org.Mpolymorpha.eg.db, keys=chloro_ath_vector, columns=c("GID"), keytype="ATH_ORTH")
-chloro_mp_vector <- chloro_mp$GID
-chloro_mp_vector <- unique(chloro_mp_vector[!is.na(chloro_mp_vector)])
-length(unique(chloro_mp_vector))
-chloro_expr <- genes.expression[chloro_mp_vector,]
-chloro_expr
-
-###Circular heatmaps
-mean.chloro.ld.00 <- (chloro_expr[,1]+chloro_expr[,2])/2
-mean.chloro.ld.04 <- (chloro_expr[,4]+chloro_expr[,5])/2
-mean.chloro.ld.08 <- (chloro_expr[,7]+chloro_expr[,8])/2
-mean.chloro.ld.12 <- (chloro_expr[,10]+chloro_expr[,11])/2
-mean.chloro.ld.16 <- (chloro_expr[,13]+chloro_expr[,14])/2
-mean.chloro.ld.20 <- (chloro_expr[,16]+chloro_expr[,17])/2
-mean.chloro.sd.00 <- (chloro_expr[,19]+chloro_expr[,20])/2
-mean.chloro.sd.04 <- (chloro_expr[,22]+chloro_expr[,23])/2
-mean.chloro.sd.08 <- (chloro_expr[,25]+chloro_expr[,26])/2
-mean.chloro.sd.12 <- (chloro_expr[,28]+chloro_expr[,29])/2
-mean.chloro.sd.16 <- (chloro_expr[,31]+chloro_expr[,32])/2
-mean.chloro.sd.20 <- (chloro_expr[,34]+chloro_expr[,35])/2
-mean.ld.expression <- matrix(c(mean.chloro.ld.00, mean.chloro.ld.04, mean.chloro.ld.08, mean.chloro.ld.12, mean.chloro.ld.16, 
-                               mean.chloro.ld.20), ncol = 6, byrow = F)
-colnames(mean.ld.expression) <- c("zt00","zt04","zt08","zt12","zt16","zt20")
-rownames(mean.ld.expression) <- rownames(chloro_expr)
-mean.ld.expression 
-
-mean.sd.expression <- matrix(c(mean.chloro.sd.00, mean.chloro.sd.04, mean.chloro.sd.08, mean.chloro.sd.12, mean.chloro.sd.16, 
-                               mean.chloro.sd.20), ncol = 6, byrow = F)
-colnames(mean.sd.expression) <- c("zt00","zt04","zt08","zt12","zt16","zt20")
-rownames(mean.sd.expression) <- rownames(chloro_expr)
-
-#SD
-sd.gene.classification <- classify.genes(rain.results = results.sd, gene.set = chloro_mp_vector)
-
-zt0.sd <- subset(sd.gene.classification, peak == 0)$gene
-zt4.sd <- subset(sd.gene.classification, peak == 4)$gene
-zt8.sd <- subset(sd.gene.classification, peak == 8)$gene
-zt12.sd <- subset(sd.gene.classification, peak == 12)$gene
-zt16.sd <- subset(sd.gene.classification, peak == 16)$gene
-zt20.sd <- subset(sd.gene.classification, peak == 20)$gene
-
-sd.mean.expression.sorted <- mean.sd.expression[c(zt0.sd,zt4.sd,zt8.sd,
-                                                       zt12.sd,zt16.sd,zt20.sd),]
-
-scale.and.interpolate.mean.expression <- function(mean.expression)
-{
-  time.points <- seq(from=0,to=24,4)
-  sorted.genes <- rownames(mean.expression)
-  
-  scaled.gene.expression <- matrix(nrow=nrow(mean.expression),ncol=49)
-  rownames(scaled.gene.expression) <- sorted.genes
-  colnames(scaled.gene.expression) <- paste("ZT",seq(from=0,to=24,by=0.5),sep="_")
-  
-  i <- 1
-  for(i in 1:length(sorted.genes))
-  {
-    current.gene <- sorted.genes[i]
-    
-    expression.current.gene.i <- mean.expression[current.gene,]
-    #expression.current.gene.i <- short.day.mean.expression[current.gene,]
-    
-    expression.current.gene.i <- c(expression.current.gene.i, expression.current.gene.i[1])
-    #scaled.gene.expression[i,] <- approx(x=time.points,expression.current.gene.i,xout=0:24)[[2]]
-    
-    scaled.gene.expression[i,] <- approx(x=time.points,expression.current.gene.i,xout=seq(from=0,to=24,by=0.5))[[2]]
-    scaled.gene.expression[i,] <- scaled.gene.expression[i,]/max(scaled.gene.expression[i,])
-  }
-  
-  return(scaled.gene.expression)
-}
-
-
-scaled.sd.mean.expression.sorted <- scale.and.interpolate.mean.expression(mean.expression = sd.mean.expression.sorted)
-nrow(scaled.sd.mean.expression.sorted)
-no.na.scaled.sd.mean.expression.sorted <- na.omit(scaled.sd.mean.expression.sorted)
-nrow(no.na.scaled.sd.mean.expression.sorted)
-
-library(gplots)
-colfunc <- colorRampPalette(c("black","tomato","yellow"))
-
-png(filename = "heatmap_SD.png",width = 400)
-heatmap.2(no.na.scaled.sd.mean.expression.sorted,Colv =FALSE,trace=c("none"),dendrogram = "none",col=colfunc(100),density.info=c("none"),key=FALSE,margins = c(2,8),cexRow = 1.2,Rowv=FALSE,labCol = c(""),labRow = c(""))
-dev.off()
-
-ind.1 <- seq(from=1,by=3,to=nrow(no.na.scaled.sd.mean.expression.sorted))
-length(ind.1)
-ind.2 <- seq(from=2,by=3,to=nrow(no.na.scaled.sd.mean.expression.sorted))
-length(ind.2)
-ind.3 <- seq(from=3,by=3,to=nrow(no.na.scaled.sd.mean.expression.sorted))
-length(ind.3)
-
-sd.cir.heatmap <- (no.na.scaled.sd.mean.expression.sorted[ind.1[1:42],] +
-                     no.na.scaled.sd.mean.expression.sorted[ind.2,] +
-                     no.na.scaled.sd.mean.expression.sorted[ind.3,])/3 #the 42 shows the number of elements of ind.1 to be used
-
-#install.packages("circlize")
-library(circlize)
-library(ComplexHeatmap)
-
-circos.par("track.height" = 0.3, "circle.margin" = c(0.2))
-col_fun_g1 = colorRamp2(c(0,0.5,1), c("darkred", "red", "greenyellow"))
-circos.heatmap(t(sd.cir.heatmap), #data in a matrix
-               col = col_fun_g1, #color function defined previosuly
-               show.sector.labels = F, #labels of track (col names) or levels
-               cluster = F) #F to avoid cluster organization 
-
-draw.sector(start.degree = 0, end.degree = 360, clock.wise = T, rou1 = 1.1, rou2 = 1.2, center = c(0,0), col = "white", border = "red", lwd = 2)
-draw.sector(start.degree = 240, end.degree = 360, clock.wise = T, rou1 = 1.1, rou2 = 1.2, center = c(0,0), col = "red", border = "red", lwd = 2)
-circos.clear()
-
-
-#LD
-ld.gene.classification <- classify.genes(rain.results = results.ld, gene.set = chloro_mp_vector)
-
-zt0.ld <- subset(ld.gene.classification, peak == 0)$gene
-zt4.ld <- subset(ld.gene.classification, peak == 4)$gene
-zt8.ld <- subset(ld.gene.classification, peak == 8)$gene
-zt12.ld <- subset(ld.gene.classification, peak == 12)$gene
-zt16.ld <- subset(ld.gene.classification, peak == 16)$gene
-zt20.ld <- subset(ld.gene.classification, peak == 20)$gene
-
-ld.mean.expression.sorted <- mean.ld.expression[c(zt0.ld,zt4.ld,zt8.ld,
-                                                  zt12.ld,zt16.ld,zt20.ld),]
-
-scaled.ld.mean.expression.sorted <- scale.and.interpolate.mean.expression(mean.expression = ld.mean.expression.sorted)
-nrow(scaled.ld.mean.expression.sorted)
-no.na.scaled.ld.mean.expression.sorted <- na.omit(scaled.ld.mean.expression.sorted)
-nrow(no.na.scaled.ld.mean.expression.sorted)
-
-colfunc <- colorRampPalette(c("black","blue","yellow"))
-
-png(filename = "heatmap_LD.png",width = 400)
-heatmap.2(no.na.scaled.ld.mean.expression.sorted,Colv =FALSE,trace=c("none"),dendrogram = "none",col=colfunc(100),density.info=c("none"),key=FALSE,margins = c(2,8),cexRow = 1.2,Rowv=FALSE,labCol = c(""),labRow = c(""))
-dev.off()
-
-ld.cir.heatmap <- (no.na.scaled.ld.mean.expression.sorted[ind.1[1:42],] +
-                     no.na.scaled.ld.mean.expression.sorted[ind.2,] +
-                     no.na.scaled.ld.mean.expression.sorted[ind.3,])/3
-
-circos.par("track.height" = 0.3, "circle.margin" = c(0.2))
-col_fun_g1 = colorRamp2(c(0,0.5,1), c("black", "blue", "yellow"))
-circos.heatmap(t(ld.cir.heatmap), #data in a matrix
-               col = col_fun_g1, #color function defined previosly
-               show.sector.labels = F, #labels of track (col names) or levels
-               cluster = F) #F to avoid cluster organization 
-
-draw.sector(start.degree = 0, end.degree = 360, clock.wise = T, rou1 = 1.1, rou2 = 1.2, center = c(0,0), col = "white", border = "blue", lwd = 2)
-draw.sector(start.degree = 120, end.degree = 360, clock.wise = T, rou1 = 1.1, rou2 = 1.2, center = c(0,0), col = "blue", border = "blue", lwd = 2)
-circos.clear()
-
-
-##Division and organization apart##
-
-division_go <- c("GO:0010020")
-org_go <- c("GO:0009658")
-
-#Selection of proper genes in Arabidopsis
-div_ath <- select(org.At.tair.db, keys=division_go, columns=c("TAIR"), keytype="GO")
-div_ath_vector <- div_ath$TAIR
-length(div_ath_vector)
-
-org_ath <- select(org.At.tair.db, keys=org_go, columns=c("TAIR"), keytype="GO")
-org_ath_vector <- org_ath$TAIR
-length(org_ath_vector)
-
-#Selection of Marchantia orthologs
-columns(org.Mpolymorpha.eg.db)
-div_mp <- select(org.Mpolymorpha.eg.db, keys=div_ath_vector, columns=c("GID"), keytype="ATH_ORTH")
-div_mp_vector <- div_mp$GID
-div_mp_vector <- unique(div_mp_vector[!is.na(div_mp_vector)])
-length(unique(div_mp_vector))
-div_expr <- genes.expression[div_mp_vector,]
-div_expr
-
-org_mp <- select(org.Mpolymorpha.eg.db, keys=org_ath_vector, columns=c("GID"), keytype="ATH_ORTH")
-org_mp_vector <- org_mp$GID
-org_mp_vector <- unique(org_mp_vector[!is.na(org_mp_vector)])
-length(unique(org_mp_vector))
-org_expr <- genes.expression[org_mp_vector,]
-org_expr
-
-###Circular heatmaps
-mean.div.ld.00 <- (div_expr[,1]+div_expr[,2])/2
-mean.div.ld.04 <- (div_expr[,4]+div_expr[,5])/2
-mean.div.ld.08 <- (div_expr[,7]+div_expr[,8])/2
-mean.div.ld.12 <- (div_expr[,10]+div_expr[,11])/2
-mean.div.ld.16 <- (div_expr[,13]+div_expr[,14])/2
-mean.div.ld.20 <- (div_expr[,16]+div_expr[,17])/2
-mean.div.sd.00 <- (div_expr[,19]+div_expr[,20])/2
-mean.div.sd.04 <- (div_expr[,22]+div_expr[,23])/2
-mean.div.sd.08 <- (div_expr[,25]+div_expr[,26])/2
-mean.div.sd.12 <- (div_expr[,28]+div_expr[,29])/2
-mean.div.sd.16 <- (div_expr[,31]+div_expr[,32])/2
-mean.div.sd.20 <- (div_expr[,34]+div_expr[,35])/2
-mean.ld.div <- matrix(c(mean.div.ld.00, mean.div.ld.04, mean.div.ld.08, mean.div.ld.12, mean.div.ld.16, 
-                               mean.div.ld.20), ncol = 6, byrow = F)
-colnames(mean.ld.div) <- c("zt00","zt04","zt08","zt12","zt16","zt20")
-rownames(mean.ld.div) <- rownames(div_expr)
-mean.ld.div 
-
-mean.sd.div <- matrix(c(mean.div.sd.00, mean.div.sd.04, mean.div.sd.08, mean.div.sd.12, mean.div.sd.16, 
-                               mean.div.sd.20), ncol = 6, byrow = F)
-colnames(mean.sd.div) <- c("zt00","zt04","zt08","zt12","zt16","zt20")
-rownames(mean.sd.div) <- rownames(div_expr)
-mean.sd.div
-
-mean.org.ld.00 <- (org_expr[,1]+org_expr[,2])/2
-mean.org.ld.04 <- (org_expr[,4]+org_expr[,5])/2
-mean.org.ld.08 <- (org_expr[,7]+org_expr[,8])/2
-mean.org.ld.12 <- (org_expr[,10]+org_expr[,11])/2
-mean.org.ld.16 <- (org_expr[,13]+org_expr[,14])/2
-mean.org.ld.20 <- (org_expr[,16]+org_expr[,17])/2
-mean.org.sd.00 <- (org_expr[,19]+org_expr[,20])/2
-mean.org.sd.04 <- (org_expr[,22]+org_expr[,23])/2
-mean.org.sd.08 <- (org_expr[,25]+org_expr[,26])/2
-mean.org.sd.12 <- (org_expr[,28]+org_expr[,29])/2
-mean.org.sd.16 <- (org_expr[,31]+org_expr[,32])/2
-mean.org.sd.20 <- (org_expr[,34]+org_expr[,35])/2
-mean.ld.org <- matrix(c(mean.org.ld.00, mean.org.ld.04, mean.org.ld.08, mean.org.ld.12, mean.org.ld.16, 
-                        mean.org.ld.20), ncol = 6, byrow = F)
-colnames(mean.ld.org) <- c("zt00","zt04","zt08","zt12","zt16","zt20")
-rownames(mean.ld.org) <- rownames(org_expr)
-mean.ld.org
-
-mean.sd.org <- matrix(c(mean.org.sd.00, mean.org.sd.04, mean.org.sd.08, mean.org.sd.12, mean.org.sd.16, 
-                        mean.org.sd.20), ncol = 6, byrow = F)
-colnames(mean.sd.org) <- c("zt00","zt04","zt08","zt12","zt16","zt20")
-rownames(mean.sd.org) <- rownames(org_expr)
-mean.sd.org
-
-#SD
-sd.div.classification <- classify.genes(rain.results = results.sd, gene.set = div_mp_vector)
-
-zt0.sd.div <- subset(sd.div.classification, peak == 0)$gene
-zt4.sd.div <- subset(sd.div.classification, peak == 4)$gene
-zt8.sd.div <- subset(sd.div.classification, peak == 8)$gene
-zt12.sd.div <- subset(sd.div.classification, peak == 12)$gene
-zt16.sd.div <- subset(sd.div.classification, peak == 16)$gene
-zt20.sd.div <- subset(sd.div.classification, peak == 20)$gene
-
-sd.mean.div.sorted <- mean.sd.div[c(zt0.sd.div,zt4.sd.div,zt8.sd.div,
-                                                  zt12.sd.div,zt16.sd.div,zt20.sd.div),]
-
-scaled.sd.mean.div.sorted <- scale.and.interpolate.mean.expression(mean.expression = sd.mean.div.sorted)
-nrow(scaled.sd.mean.div.sorted)
-no.na.scaled.sd.mean.div.sorted <- na.omit(scaled.sd.mean.div.sorted)
-nrow(no.na.scaled.sd.mean.div.sorted)
-
-
-
-sd.org.classification <- classify.genes(rain.results = results.sd, gene.set = org_mp_vector)
-
-zt0.sd.org <- subset(sd.org.classification, peak == 0)$gene
-zt4.sd.org <- subset(sd.org.classification, peak == 4)$gene
-zt8.sd.org <- subset(sd.org.classification, peak == 8)$gene
-zt12.sd.org <- subset(sd.org.classification, peak == 12)$gene
-zt16.sd.org <- subset(sd.org.classification, peak == 16)$gene
-zt20.sd.org <- subset(sd.org.classification, peak == 20)$gene
-
-sd.mean.org.sorted <- mean.sd.org[c(zt0.sd.org,zt4.sd.org,zt8.sd.org,
-                                    zt12.sd.org,zt16.sd.org,zt20.sd.org),]
-
-scaled.sd.mean.org.sorted <- scale.and.interpolate.mean.expression(mean.expression = sd.mean.org.sorted)
-nrow(scaled.sd.mean.org.sorted)
-no.na.scaled.sd.mean.org.sorted <- na.omit(scaled.sd.mean.org.sorted)
-nrow(no.na.scaled.sd.mean.org.sorted)
-
-
-#ind.1.div <- seq(from=1,by=3,to=nrow(no.na.scaled.sd.mean.div.sorted))
-#length(ind.1.div)
-#ind.2.div <- seq(from=2,by=3,to=nrow(no.na.scaled.sd.mean.div.sorted))
-#length(ind.2.div)
-#ind.3.div <- seq(from=3,by=3,to=nrow(no.na.scaled.sd.mean.div.sorted))
-#length(ind.3.div)
-
-#sd.cir.heatmap.div <- (no.na.scaled.sd.mean.div.sorted[ind.1.div[1:6],] +
-#                     no.na.scaled.sd.mean.div.sorted[ind.2.div,] +
-#                     no.na.scaled.sd.mean.div.sorted[ind.3.div,])/3 #the 6 shows the number of elements of ind.1 to be used
-
-
-#ind.1.org <- seq(from=1,by=3,to=nrow(no.na.scaled.sd.mean.org.sorted))
-#length(ind.1.org)
-#ind.2.org <- seq(from=2,by=3,to=nrow(no.na.scaled.sd.mean.org.sorted))
-#length(ind.2.org)
-#ind.3.org <- seq(from=3,by=3,to=nrow(no.na.scaled.sd.mean.org.sorted))
-#length(ind.3.org)
-
-#sd.cir.heatmap.org <- (no.na.scaled.sd.mean.org.sorted[ind.1.org[1:38],] +
-#                         no.na.scaled.sd.mean.org.sorted[ind.2.org,] +
-#                         no.na.scaled.sd.mean.org.sorted[ind.3.org,])/3
-
-
-circos.par("track.height" = 0.3, "circle.margin" = c(0.2))
-col_fun_g1 = colorRamp2(c(0,0.5,1), c("darkred", "red", "greenyellow"))
-circos.heatmap(t(no.na.scaled.sd.mean.org.sorted), #data in a matrix
-               col = col_fun_g1, #color function defined previosuly
-               show.sector.labels = F, #labels of track (col names) or levels
-               cluster = F) #F to avoid cluster organization 
-draw.sector(start.degree = 0, end.degree = 360, clock.wise = T, rou1 = 0.69, rou2 = 0.7, center = c(0,0), col = "black", border = "black", lwd = 2)
-circos.par("track.height" = 0.2)
-circos.heatmap(t(no.na.scaled.sd.mean.div.sorted), #data in a matrix
-               col = col_fun_g1, #color function defined previosuly
-               show.sector.labels = F, #labels of track (col names) or levels
-               cluster = F) #F to avoid cluster organization
-
-draw.sector(start.degree = 0, end.degree = 360, clock.wise = T, rou1 = 1.1, rou2 = 1.2, center = c(0,0), col = "white", border = "red", lwd = 2)
-draw.sector(start.degree = 240, end.degree = 360, clock.wise = T, rou1 = 1.1, rou2 = 1.2, center = c(0,0), col = "red", border = "red", lwd = 2)
-circos.clear()
-
-lgd = Legend(title = "", col_fun = col_fun_g1, direction = "vertical", grid_width = unit(10, "mm"), grid_height = unit(12,"mm"))
-grid.draw(lgd)
-grid.newpage()
-
-#LD
-ld.div.classification <- classify.genes(rain.results = results.ld, gene.set = div_mp_vector)
-
-zt0.ld.div <- subset(ld.div.classification, peak == 0)$gene
-zt4.ld.div <- subset(ld.div.classification, peak == 4)$gene
-zt8.ld.div <- subset(ld.div.classification, peak == 8)$gene
-zt12.ld.div <- subset(ld.div.classification, peak == 12)$gene
-zt16.ld.div <- subset(ld.div.classification, peak == 16)$gene
-zt20.ld.div <- subset(ld.div.classification, peak == 20)$gene
-
-ld.mean.div.sorted <- mean.ld.div[c(zt0.ld.div,zt4.ld.div,zt8.ld.div,
-                                    zt12.ld.div,zt16.ld.div,zt20.ld.div),]
-
-scaled.ld.mean.div.sorted <- scale.and.interpolate.mean.expression(mean.expression = ld.mean.div.sorted)
-nrow(scaled.ld.mean.div.sorted)
-no.na.scaled.ld.mean.div.sorted <- na.omit(scaled.ld.mean.div.sorted)
-nrow(no.na.scaled.ld.mean.div.sorted)
-
-
-
-ld.org.classification <- classify.genes(rain.results = results.ld, gene.set = org_mp_vector)
-
-zt0.ld.org <- subset(ld.org.classification, peak == 0)$gene
-zt4.ld.org <- subset(ld.org.classification, peak == 4)$gene
-zt8.ld.org <- subset(ld.org.classification, peak == 8)$gene
-zt12.ld.org <- subset(ld.org.classification, peak == 12)$gene
-zt16.ld.org <- subset(ld.org.classification, peak == 16)$gene
-zt20.ld.org <- subset(ld.org.classification, peak == 20)$gene
-
-ld.mean.org.sorted <- mean.ld.org[c(zt0.ld.org,zt4.ld.org,zt8.ld.org,
-                                    zt12.ld.org,zt16.ld.org,zt20.ld.org),]
-
-scaled.ld.mean.org.sorted <- scale.and.interpolate.mean.expression(mean.expression = ld.mean.org.sorted)
-nrow(scaled.ld.mean.org.sorted)
-no.na.scaled.ld.mean.org.sorted <- na.omit(scaled.ld.mean.org.sorted)
-nrow(no.na.scaled.ld.mean.org.sorted)
-
-
-#ld.cir.heatmap.div <- (no.na.scaled.ld.mean.div.sorted[ind.1.div[1:6],] +
-#                         no.na.scaled.ld.mean.div.sorted[ind.2.div,] +
-#                         no.na.scaled.ld.mean.div.sorted[ind.3.div,])/3 #the 6 shows the number of elements of ind.1 to be used
-
-
-#ld.cir.heatmap.org <- (no.na.scaled.ld.mean.org.sorted[ind.1.org[1:38],] +
-#                         no.na.scaled.ld.mean.org.sorted[ind.2.org,] +
-#                         no.na.scaled.ld.mean.org.sorted[ind.3.org,])/3
-
-
-circos.par("track.height" = 0.3, "circle.margin" = c(0.2))
-col_fun_g1 = colorRamp2(c(0,0.5,1), c("black", "blue", "yellow"))
-circos.heatmap(t(no.na.scaled.ld.mean.org.sorted), #data in a matrix
-               col = col_fun_g1, #color function defined previosuly
-               show.sector.labels = F, #labels of track (col names) or levels
-               cluster = F) #F to avoid cluster organization 
-draw.sector(start.degree = 0, end.degree = 360, clock.wise = T, rou1 = 0.69, rou2 = 0.7, center = c(0,0), col = "navy", border = "navy", lwd = 2)
-circos.heatmap(t(no.na.scaled.ld.mean.div.sorted), #data in a matrix
-               col = col_fun_g1, #color function defined previosuly
-               show.sector.labels = F, #labels of track (col names) or levels
-               cluster = F) #F to avoid cluster organization
-
-draw.sector(start.degree = 0, end.degree = 360, clock.wise = T, rou1 = 1.1, rou2 = 1.2, center = c(0,0), col = "white", border = "blue", lwd = 2)
-draw.sector(start.degree = 120, end.degree = 360, clock.wise = T, rou1 = 1.1, rou2 = 1.2, center = c(0,0), col = "blue", border = "blue", lwd = 2)
-circos.clear()
-
-lgd = Legend(title = "", col_fun = col_fun_g1, direction = "vertical", grid_width = unit(10, "mm"), grid_height = unit(12,"mm"))
-grid.draw(lgd)
-grid.newpage()
-
-library(ComplexHeatmap)
-
-
-##Electron flow##
-
-plot.ld.sd(gene.id = "Mp7g15130",gene.name = "STN7", ld.gene.expression,sd.gene.expression)
-plot.ld.sd(gene.id = "Mp7g16020",gene.name = "STN8", ld.gene.expression,sd.gene.expression)
-plot.ld.sd(gene.id = "Mp6g19810",gene.name = "PPH1", ld.gene.expression,sd.gene.expression)
-plot.ld.sd(gene.id = "Mp3g23840",gene.name = "PGR5", ld.gene.expression,sd.gene.expression)
-plot.ld.sd(gene.id = "Mp5g09890",gene.name = "PGRL1", ld.gene.expression,sd.gene.expression)
-
-plot.ld.sd.ll(gene.id = "Mp7g15130",gene.name = "STN7", genes.expression)
-plot.ld.sd.ll(gene.id = "Mp7g16020",gene.name = "STN8", genes.expression)
-plot.ld.sd.ll(gene.id = "Mp6g19810",gene.name = "PPH1", genes.expression)
-plot.ld.sd.ll(gene.id = "Mp3g23840",gene.name = "PGR5", genes.expression)
-plot.ld.sd.ll(gene.id = "Mp5g09890",gene.name = "PGRL1", genes.expression)
-
-flow_vector <- c("Mp7g15130","Mp7g16020","Mp6g19810","Mp3g23840","Mp5g09890")
-flow_expr <- genes.expression[flow_vector,]
-
-mean.flow.ld.00 <- (flow_expr[,1]+flow_expr[,2])/2
-mean.flow.ld.04 <- (flow_expr[,4]+flow_expr[,5])/2
-mean.flow.ld.08 <- (flow_expr[,7]+flow_expr[,8])/2
-mean.flow.ld.12 <- (flow_expr[,10]+flow_expr[,11])/2
-mean.flow.ld.16 <- (flow_expr[,13]+flow_expr[,14])/2
-mean.flow.ld.20 <- (flow_expr[,16]+flow_expr[,17])/2
-mean.flow.sd.00 <- (flow_expr[,19]+flow_expr[,20])/2
-mean.flow.sd.04 <- (flow_expr[,22]+flow_expr[,23])/2
-mean.flow.sd.08 <- (flow_expr[,25]+flow_expr[,26])/2
-mean.flow.sd.12 <- (flow_expr[,28]+flow_expr[,29])/2
-mean.flow.sd.16 <- (flow_expr[,31]+flow_expr[,32])/2
-mean.flow.sd.20 <- (flow_expr[,34]+flow_expr[,35])/2
-mean.ld.flow <- matrix(c(mean.flow.ld.00, mean.flow.ld.04, mean.flow.ld.08, mean.flow.ld.12, mean.flow.ld.16, 
-                        mean.flow.ld.20), ncol = 6, byrow = F)
-colnames(mean.ld.flow) <- c("zt00","zt04","zt08","zt12","zt16","zt20")
-rownames(mean.ld.flow) <- rownames(flow_expr)
-mean.ld.flow
-
-mean.sd.flow <- matrix(c(mean.flow.sd.00, mean.flow.sd.04, mean.flow.sd.08, mean.flow.sd.12, mean.flow.sd.16, 
-                        mean.flow.sd.20), ncol = 6, byrow = F)
-colnames(mean.sd.flow) <- c("zt00","zt04","zt08","zt12","zt16","zt20")
-rownames(mean.sd.flow) <- rownames(flow_expr)
-mean.sd.flow
-
-#SD
-sd.flow.classification <- classify.genes(rain.results = results.sd, gene.set = flow_vector)
-
-zt0.sd.flow <- subset(sd.flow.classification, peak == 0)$gene
-zt4.sd.flow <- subset(sd.flow.classification, peak == 4)$gene
-zt8.sd.flow <- subset(sd.flow.classification, peak == 8)$gene
-zt12.sd.flow <- subset(sd.flow.classification, peak == 12)$gene
-zt16.sd.flow <- subset(sd.flow.classification, peak == 16)$gene
-zt20.sd.flow <- subset(sd.flow.classification, peak == 20)$gene
-
-sd.mean.flow.sorted <- mean.sd.flow[c(zt0.sd.flow,zt4.sd.flow,zt8.sd.flow,
-                                    zt12.sd.flow,zt16.sd.flow,zt20.sd.flow),]
-
-scaled.sd.mean.flow.sorted <- scale.and.interpolate.mean.expression(mean.expression = sd.mean.flow.sorted)
-nrow(scaled.sd.mean.flow.sorted)
-no.na.scaled.sd.mean.flow.sorted <- na.omit(scaled.sd.mean.flow.sorted)
-nrow(no.na.scaled.sd.mean.flow.sorted)
-
-library(circlize)
-library(ComplexHeatmap)
-circos.par("track.height" = 0.3, "circle.margin" = c(0.2))
-col_fun_g1 = colorRamp2(c(0,0.5,1), c("darkred", "red", "greenyellow"))
-circos.heatmap(t(no.na.scaled.sd.mean.flow.sorted), #data in a matrix
-               col = col_fun_g1, #color function defined previosuly
-               show.sector.labels = F, #labels of track (col names) or levels
-               cluster = F) #F to avoid cluster organization 
-
-draw.sector(start.degree = 0, end.degree = 360, clock.wise = T, rou1 = 1.1, rou2 = 1.2, center = c(0,0), col = "white", border = "red", lwd = 2)
-draw.sector(start.degree = 240, end.degree = 360, clock.wise = T, rou1 = 1.1, rou2 = 1.2, center = c(0,0), col = "red", border = "red", lwd = 2)
-circos.clear()
-grid.newpage()
-
-#LD
-ld.flow.classification <- classify.genes(rain.results = results.ld, gene.set = flow_vector)
-
-zt0.ld.flow <- subset(ld.flow.classification, peak == 0)$gene
-zt4.ld.flow <- subset(ld.flow.classification, peak == 4)$gene
-zt8.ld.flow <- subset(ld.flow.classification, peak == 8)$gene
-zt12.ld.flow <- subset(ld.flow.classification, peak == 12)$gene
-zt16.ld.flow <- subset(ld.flow.classification, peak == 16)$gene
-zt20.ld.flow <- subset(ld.flow.classification, peak == 20)$gene
-
-ld.mean.flow.sorted <- mean.ld.flow[c(zt0.ld.flow,zt4.ld.flow,zt8.ld.flow,
-                                      zt12.ld.flow,zt16.ld.flow,zt20.ld.flow),]
-
-scaled.ld.mean.flow.sorted <- scale.and.interpolate.mean.expression(mean.expression = ld.mean.flow.sorted)
-nrow(scaled.ld.mean.flow.sorted)
-no.na.scaled.ld.mean.flow.sorted <- na.omit(scaled.ld.mean.flow.sorted)
-nrow(no.na.scaled.ld.mean.flow.sorted)
-
-circos.par("track.height" = 0.3, "circle.margin" = c(0.2))
-col_fun_g1 = colorRamp2(c(0,0.5,1), c("black", "blue", "yellow"))
-circos.heatmap(t(no.na.scaled.ld.mean.flow.sorted), #data in a matrix
-               col = col_fun_g1, #color function defined previosuly
-               show.sector.labels = F, #labels of track (col names) or levels
-               cluster = F) #F to avoid cluster organization 
-
-draw.sector(start.degree = 0, end.degree = 360, clock.wise = T, rou1 = 1.1, rou2 = 1.2, center = c(0,0), col = "white", border = "blue", lwd = 2)
-draw.sector(start.degree = 120, end.degree = 360, clock.wise = T, rou1 = 1.1, rou2 = 1.2, center = c(0,0), col = "blue", border = "blue", lwd = 2)
-circos.clear()
-grid.newpage()
-
-plot.ld.sd(gene.id = "Mp8g05910", gene.name = "PsbS", ld.gene.expression, sd.gene.expression)
-
-
-
-### Genes involved in photoreolcation of chloroplasts
-
-# MpPHOT (Mp5g03810) expression trough LD and SD
-png("../../../Figs_for_Windows/Figcloro/phot.png", width = 700, height = 400)
-plot.ld.sd("Mp5g03810", "MpPHOT", ld.gene.expression, sd.gene.expression)
-dev.off()
-"Mp5g03810" %in% rhythmic.genes.ld
-"Mp5g03810" %in% rhythmic.genes.sd
-plot.ld.sd.ll("Mp5g03810", "MpPHOT", genes.expression)
-# MpPHOT shows a rhythmic expression pattern in both photoperiods, with marked reductions at 
-# dusk, which could explain the relocation of chloroplasts from the periclinal to the anticlinal
-# cell walls during the dark periods
-# 
-
-# CHUP 1 (Mp7g03540) expression trough LD and SD
-plot.ld.sd("Mp7g03540", "CHUP1", ld.gene.expression, sd.gene.expression)
-"Mp7g03540" %in% rhythmic.genes.ld
-"Mp7g03540" %in% rhythmic.genes.sd
-plot.ld.sd.ll("Mp7g03540", "CHUP1", genes.expression)
-
-# KAC1 (Mp3g03760) expression trough LD and SD
-plot.ld.sd("Mp3g03760", "KAC1", ld.gene.expression, sd.gene.expression)
-"Mp3g03760" %in% rhythmic.genes.ld
-"Mp3g03760" %in% rhythmic.genes.sd
-plot.ld.sd.ll("Mp3g03760", "KAC1", genes.expression)
-# Shows rhythmicity in SD but not in LD
-
-# BLUS1 (Mp8g10870) expression trough LD and SD
-plot.ld.sd("Mp8g10870", "BLUS1", ld.gene.expression, sd.gene.expression)
-"Mp8g10870" %in% rhythmic.genes.ld
-"Mp8g10870" %in% rhythmic.genes.sd
-plot.ld.sd.ll("Mp8g10870", "BLUS1", genes.expression)
-# Shows rhythmicity in LD but not in SD
-
-# THRUMIN1 (Mp1g07590 and Mp3g04860) expression trough LD and SD
-plot.ld.sd("Mp1g07590", "THRUMIN1", ld.gene.expression, sd.gene.expression)
-"Mp1g07590" %in% rhythmic.genes.ld
-"Mp1g07590" %in% rhythmic.genes.sd
-plot.ld.sd.ll("Mp1g07590", "THRUMIN1", genes.expression)
-# Shows rhythmicity in SD but not in LD
-
-plot.ld.sd("Mp3g04860", "THRUMIN1", ld.gene.expression, sd.gene.expression)
-"Mp3g04860" %in% rhythmic.genes.ld
-"Mp3g04860" %in% rhythmic.genes.sd
-plot.ld.sd.ll("Mp3g04860", "THRUMIN1", genes.expression)
-# Shows rhythmicity in SD but not in LD
-
-# JAC1 (Mp6g17960) expression trough LD and SD
-plot.ld.sd("Mp6g17960", "JAC1", ld.gene.expression, sd.gene.expression)
-"Mp6g17960" %in% rhythmic.genes.ld
-"Mp6g17960" %in% rhythmic.genes.sd
-plot.ld.sd.ll("Mp6g17960", "JAC1", genes.expression)
-# Does not show a rhythmic behaviour beacause of a lack of expression in these
-# conditions
-
-# Homologs for OEP7, WEB1, PMI1 and PMI2 were not found in Marchantiaa's genome

@@ -1,4 +1,4 @@
-.libPaths("/home/marcos/R/x86_64-pc-linux-gnu-library/4.1")
+#.libPaths("/home/marcos/R/x86_64-pc-linux-gnu-library/4.1")
 
 # Read data
 genes.expression <- read.table(file ="gene_expression_marchantia.tsv",sep="\t",header=T,as.is=T)
@@ -98,3 +98,30 @@ dev.off()
 
 # Gene expression levels per sample
 boxplot(log2(genes.expression + 1),col=rainbow(ncol(genes.expression)),ylab="log2(FPKM + 1)",cex.lab=1.5,las=2)
+
+
+# Expression original
+original_exp <- read.table(file ="../previous_accesory_data/marchantia_gene_expression_original.tsv",sep="\t",header=T,as.is=T)
+original_exp<-as.matrix(original_exp)
+
+mean(genes.expression[,ld.zt.i]) - mean(original_exp[,ld.zt.i])
+mean(genes.expression[,ll.ld.zt.i]) - mean(original_exp[,ll.ld.zt.i])
+mean(genes.expression[,dd.ld.zt.i]) - mean(original_exp[,dd.ld.zt.i])
+mean(genes.expression[,sd.zt.i]) - mean(original_exp[,sd.zt.i])
+mean(genes.expression[,ll.sd.zt.i]) - mean(original_exp[,ll.sd.zt.i])
+mean(genes.expression[,dd.sd.zt.i]) - mean(original_exp[,dd.sd.zt.i])
+
+boxplot(mean(genes.expression[,ld.zt.i]), mean(original_exp[,ld.zt.i]),
+        mean(genes.expression[,ll.ld.zt.i]), mean(original_exp[,ll.ld.zt.i]),
+        mean(genes.expression[,dd.ld.zt.i]), mean(original_exp[,dd.ld.zt.i]),
+        mean(genes.expression[,sd.zt.i]), mean(original_exp[,dd.ld.zt.i]),
+        mean(genes.expression[,ll.sd.zt.i]), mean(original_exp[,ll.sd.zt.i]),
+        mean(genes.expression[,dd.sd.zt.i]), mean(original_exp[,dd.sd.zt.i]))
+
+
+boxplot(median(genes.expression[,ld.zt.i]), median(original_exp[,ld.zt.i]),
+        median(genes.expression[,ll.ld.zt.i]), median(original_exp[,ll.ld.zt.i]),
+        median(genes.expression[,dd.ld.zt.i]), median(original_exp[,dd.ld.zt.i]),
+        median(genes.expression[,sd.zt.i]), median(original_exp[,dd.ld.zt.i]),
+        median(genes.expression[,ll.sd.zt.i]), median(original_exp[,ll.sd.zt.i]),
+        median(genes.expression[,dd.sd.zt.i]), median(original_exp[,dd.sd.zt.i]))
