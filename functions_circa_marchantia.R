@@ -719,3 +719,873 @@ heatmap.gene <- function(gene.id)
   
 }
 
+
+# Plot transitions with errors
+# LD LL
+plot.ld.ll.wave.error <- function(gene.id, gene.name="", genes.expression, period=1, 
+                                  wave_parameters.df, data.points = F, 
+                                  color.1 = "royalblue3", color.2="skyblue")
+{
+  wave_parameters <- wave_parameters.df[gene.id,]
+  
+  wave.ld <- sapply(seq(from=0,by=0.1,to=68), function(x) 
+    wave_parameters["ld.mesor.estimate"]+wave_parameters["ld.amplitude.estimate"]*cos(period*(x*pi/12-wave_parameters["ld.peak.time.hours"]*pi/12)))
+  
+  wave.ld.ggplot <- data.frame(x = seq(from=0,by=0.1,to=68), y = unlist(wave.ld),
+                               min.bound = unlist(wave.ld) - wave_parameters$error_amp_1,
+                               max.bound = unlist(wave.ld) + wave_parameters$error_amp_1)
+  points_ld <- data.frame(x=seq(from=0,by=4,to=68), y=genes.expression[gene.id,c(paste(ld.zt,1,sep="_"),paste(ld.zt,2,sep="_"), paste(ld.zt,3,sep="_"))])
+  
+  wave.ll <- sapply(seq(from=72,by=0.1,to=116), function(x) 
+    wave_parameters["ll.mesor.estimate"]+wave_parameters["ll.amplitude.estimate"]*cos(period*(x*pi/12-wave_parameters["ll.peak.time.hours"]*pi/12)))
+  
+  wave.ll.ggplot <- data.frame(x = seq(from=72,by=0.1,to=116), y = unlist(wave.ll),
+                               min.bound = unlist(wave.ll) - wave_parameters$error_amp_2,
+                               max.bound = unlist(wave.ll) + wave_parameters$error_amp_2)
+  points_ll <- data.frame(x=seq(from=72,by=4,to=116), y=genes.expression[gene.id,c(paste(ll.ld.zt,1,sep="_"),
+                                                                                   paste(ll.ld.zt,2,sep="_"))])
+  
+  min.limit <- min(c(points_ld$y), points_ll$y, wave.ld.ggplot$min.bound, wave.ll.ggplot$min.bound)
+  max.limit <- max(c(points_ld$y), points_ll$y, wave.ld.ggplot$max.bound, wave.ll.ggplot$max.bound)
+  
+  df_polygon_ld <- data.frame(
+    x = c(0,16,16,0,16,24,24,16,24,40,40,24,40,48,48,40,48,64,64,48,64,72,72,64,
+          72,88,88,72,88,96,96,88,96,112,112,96,112,120,120,112),
+    
+    y = rep(c(min.limit - (max.limit - min.limit)/25, min.limit - (max.limit - min.limit)/25, 
+              min.limit - (max.limit - min.limit)/50, min.limit - (max.limit - min.limit)/50), 10),
+    group = factor(rep(1:10, each = 4))
+  )
+  
+  if(data.points)
+  {
+    ggplot() +
+      geom_ribbon(data = wave.ld.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.1, alpha = 0.2) +
+      geom_line(data = wave.ld.ggplot, aes(x = x, y = y), color = color.1, size = 1) +
+      geom_point(data = points_ld, aes(x = x, y = y), color = color.1, size = 1, alpha=0.3) +
+      
+      geom_ribbon(data = wave.ll.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.2, alpha = 0.2) +
+      geom_line(data = wave.ll.ggplot, aes(x = x, y = y), color = color.2, size = 1) +
+      geom_point(data = points_ll, aes(x = x, y = y), color = color.2, size = 1, alpha=0.3) +
+      scale_x_continuous(
+        breaks = seq(from=0,to=116,by=4),                
+        labels = c(paste0("ZT", rep(seq(0,20,4),3)), paste0("CT", rep(seq(0,20,4),2)))) +
+      scale_y_continuous(limits = c(min.limit - (max.limit - min.limit)/25, 
+                                    max.limit)) +
+      labs(title = gene.id,
+           y = "FPKM",
+           x = "") +
+      theme(
+        panel.background = element_rect(fill = "transparent",
+                                        colour = NA_character_), # necessary to avoid drawing panel outline
+        panel.grid.major = element_blank(), # get rid of major grid
+        panel.grid.minor = element_blank(), # get rid of minor grid
+        plot.background = element_rect(fill = "transparent",
+                                       colour = NA_character_), # necessary to avoid drawing plot outline
+        legend.background = element_rect(fill = "transparent"),
+        legend.box.background = element_rect(fill = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.position = "none",
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(
+          size = 10, angle = 90, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.text.y = element_text(
+          size = 12, angle = 0, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.title.y = element_text(
+          size = 12, angle = 90, vjust = 2.5, hjust = 0.5,
+          face = "bold", color = "black"
+        )) +
+      geom_polygon(
+        data = df_polygon_ld,
+        aes(x, y, fill = group, group = group),
+        inherit.aes = FALSE,
+        color = color.1
+      ) +
+      scale_fill_manual(values = c(rep(c("white", color.1), 3), rep(c("white", color.2), 2)))
+  }
+  else
+  {
+    ggplot() +
+      geom_ribbon(data = wave.ld.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.1, alpha = 0.2) +
+      geom_line(data = wave.ld.ggplot, aes(x = x, y = y), color = color.1, size = 1) +
+      
+      geom_ribbon(data = wave.ll.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.2, alpha = 0.2) +
+      geom_line(data = wave.ll.ggplot, aes(x = x, y = y), color = color.2, size = 1) +
+      scale_x_continuous(
+        breaks = seq(from=0,to=116,by=4),                
+        labels = c(paste0("ZT", rep(seq(0,20,4),3)), paste0("CT", rep(seq(0,20,4),2)))) +
+      scale_y_continuous(limits = c(min.limit - (max.limit - min.limit)/25, 
+                                    max.limit)) +
+      labs(title = gene.id,
+           y = "FPKM",
+           x = "") +
+      theme(
+        panel.background = element_rect(fill = "transparent",
+                                        colour = NA_character_), # necessary to avoid drawing panel outline
+        panel.grid.major = element_blank(), # get rid of major grid
+        panel.grid.minor = element_blank(), # get rid of minor grid
+        plot.background = element_rect(fill = "transparent",
+                                       colour = NA_character_), # necessary to avoid drawing plot outline
+        legend.background = element_rect(fill = "transparent"),
+        legend.box.background = element_rect(fill = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.position = "none",
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(
+          size = 10, angle = 90, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.text.y = element_text(
+          size = 12, angle = 0, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.title.y = element_text(
+          size = 12, angle = 90, vjust = 2.5, hjust = 0.5,
+          face = "bold", color = "black"
+        )) +
+      geom_polygon(
+        data = df_polygon_ld,
+        aes(x, y, fill = group, group = group),
+        inherit.aes = FALSE,
+        color = color.1
+      ) +
+      scale_fill_manual(values = c(rep(c("white", color.1), 3), rep(c("white", color.2), 2)))
+  }
+  
+}
+
+# LD DD
+plot.ld.dd.wave.error <- function(gene.id, gene.name="", genes.expression, period=1, 
+                                  wave_parameters.df, data.points = F, 
+                                  color.1 = "royalblue3", color.2="darkblue")
+{
+  wave_parameters <- wave_parameters.df[gene.id,]
+  
+  wave.ld <- sapply(seq(from=0,by=0.1,to=68), function(x) 
+    wave_parameters["ld.mesor.estimate"]+wave_parameters["ld.amplitude.estimate"]*cos(period*(x*pi/12-wave_parameters["ld.peak.time.hours"]*pi/12)))
+  
+  wave.ld.ggplot <- data.frame(x = seq(from=0,by=0.1,to=68), y = unlist(wave.ld),
+                               min.bound = unlist(wave.ld) - wave_parameters$error_amp_2,
+                               max.bound = unlist(wave.ld) + wave_parameters$error_amp_2)
+  points_ld <- data.frame(x=seq(from=0,by=4,to=68), y=genes.expression[gene.id,c(paste(ld.zt,1,sep="_"),paste(ld.zt,2,sep="_"), paste(ld.zt,3,sep="_"))])
+  
+  wave.dd <- sapply(seq(from=72,by=0.1,to=116), function(x) 
+    wave_parameters["dd.mesor.estimate"]+wave_parameters["dd.amplitude.estimate"]*cos(period*(x*pi/12-wave_parameters["dd.peak.time.hours"]*pi/12)))
+  
+  wave.dd.ggplot <- data.frame(x = seq(from=72,by=0.1,to=116), y = unlist(wave.dd),
+                               min.bound = unlist(wave.dd) - wave_parameters$error_amp_1,
+                               max.bound = unlist(wave.dd) + wave_parameters$error_amp_1)
+  points_dd <- data.frame(x=seq(from=72,by=4,to=116), y=genes.expression[gene.id,c(paste(dd.ld.zt,1,sep="_"),
+                                                                                   paste(dd.ld.zt,2,sep="_"))])
+  
+  min.limit <- min(c(points_ld$y), points_dd$y, wave.ld.ggplot$min.bound, wave.dd.ggplot$min.bound)
+  max.limit <- max(c(points_ld$y), points_dd$y, wave.ld.ggplot$max.bound, wave.dd.ggplot$max.bound)
+  
+  df_polygon_ld <- data.frame(
+    x = c(0,16,16,0,16,24,24,16,24,40,40,24,40,48,48,40,48,64,64,48,64,72,72,64,
+          72,88,88,72,88,96,96,88,96,112,112,96,112,120,120,112),
+    
+    y = rep(c(min.limit - (max.limit - min.limit)/25, min.limit - (max.limit - min.limit)/25, 
+              min.limit - (max.limit - min.limit)/50, min.limit - (max.limit - min.limit)/50), 10),
+    group = factor(rep(1:10, each = 4))
+  )
+  
+  if(data.points)
+  {
+    ggplot() +
+      geom_ribbon(data = wave.ld.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.1, alpha = 0.2) +
+      geom_line(data = wave.ld.ggplot, aes(x = x, y = y), color = color.1, size = 1) +
+      geom_point(data = points_ld, aes(x = x, y = y), color = color.1, size = 1, alpha=0.3) +
+      
+      geom_ribbon(data = wave.dd.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.2, alpha = 0.2) +
+      geom_line(data = wave.dd.ggplot, aes(x = x, y = y), color = color.2, size = 1) +
+      geom_point(data = points_dd, aes(x = x, y = y), color = color.2, size = 1, alpha=0.3) +
+      scale_x_continuous(
+        breaks = seq(from=0,to=116,by=4),                
+        labels = c(paste0("ZT", rep(seq(0,20,4),3)), paste0("CT", rep(seq(0,20,4),2)))) +
+      scale_y_continuous(limits = c(min.limit - (max.limit - min.limit)/25, 
+                                    max.limit)) +
+      labs(title = gene.id,
+           y = "FPKM",
+           x = "") +
+      theme(
+        panel.background = element_rect(fill = "transparent",
+                                        colour = NA_character_), # necessary to avoid drawing panel outline
+        panel.grid.major = element_blank(), # get rid of major grid
+        panel.grid.minor = element_blank(), # get rid of minor grid
+        plot.background = element_rect(fill = "transparent",
+                                       colour = NA_character_), # necessary to avoid drawing plot outline
+        legend.background = element_rect(fill = "transparent"),
+        legend.box.background = element_rect(fill = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.position = "none",
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(
+          size = 10, angle = 90, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.text.y = element_text(
+          size = 12, angle = 0, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.title.y = element_text(
+          size = 12, angle = 90, vjust = 2.5, hjust = 0.5,
+          face = "bold", color = "black"
+        )) +
+      geom_polygon(
+        data = df_polygon_ld,
+        aes(x, y, fill = group, group = group),
+        inherit.aes = FALSE,
+        color = color.1
+      ) +
+      scale_fill_manual(values = c(rep(c("white", color.1), 3), rep(c(color.2, color.1), 2)))
+  }
+  else
+  {
+    ggplot() +
+      geom_ribbon(data = wave.ld.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.1, alpha = 0.2) +
+      geom_line(data = wave.ld.ggplot, aes(x = x, y = y), color = color.1, size = 1) +
+      
+      geom_ribbon(data = wave.dd.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.2, alpha = 0.2) +
+      geom_line(data = wave.dd.ggplot, aes(x = x, y = y), color = color.2, size = 1) +
+      scale_x_continuous(
+        breaks = seq(from=0,to=116,by=4),                
+        labels = c(paste0("ZT", rep(seq(0,20,4),3)), paste0("CT", rep(seq(0,20,4),2)))) +
+      scale_y_continuous(limits = c(min.limit - (max.limit - min.limit)/25, 
+                                    max.limit)) +
+      labs(title = gene.id,
+           y = "FPKM",
+           x = "") +
+      theme(
+        panel.background = element_rect(fill = "transparent",
+                                        colour = NA_character_), # necessary to avoid drawing panel outline
+        panel.grid.major = element_blank(), # get rid of major grid
+        panel.grid.minor = element_blank(), # get rid of minor grid
+        plot.background = element_rect(fill = "transparent",
+                                       colour = NA_character_), # necessary to avoid drawing plot outline
+        legend.background = element_rect(fill = "transparent"),
+        legend.box.background = element_rect(fill = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.position = "none",
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(
+          size = 10, angle = 90, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.text.y = element_text(
+          size = 12, angle = 0, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.title.y = element_text(
+          size = 12, angle = 90, vjust = 2.5, hjust = 0.5,
+          face = "bold", color = "black"
+        )) +
+      geom_polygon(
+        data = df_polygon_ld,
+        aes(x, y, fill = group, group = group),
+        inherit.aes = FALSE,
+        color = color.1
+      ) +
+      scale_fill_manual(values = c(rep(c("white", color.1), 3), rep(c(color.2, color.1), 2)))
+  }
+  
+}
+
+# SD LL
+plot.sd.ll.wave.error <- function(gene.id, gene.name="", genes.expression, period=1, 
+                                  wave_parameters.df, data.points = F, 
+                                  color.1 = "tomato3", color.2="salmon")
+{
+  wave_parameters <- wave_parameters.df[gene.id,]
+  
+  wave.sd <- sapply(seq(from=0,by=0.1,to=68), function(x) 
+    wave_parameters["sd.mesor.estimate"]+wave_parameters["sd.amplitude.estimate"]*cos(period*(x*pi/12-wave_parameters["sd.peak.time.hours"]*pi/12)))
+  
+  wave.sd.ggplot <- data.frame(x = seq(from=0,by=0.1,to=68), y = unlist(wave.sd),
+                               min.bound = unlist(wave.sd) - wave_parameters$error_amp_2,
+                               max.bound = unlist(wave.sd) + wave_parameters$error_amp_2)
+  points_sd <- data.frame(x=seq(from=0,by=4,to=68), y=genes.expression[gene.id,c(paste(sd.zt,1,sep="_"),paste(sd.zt,2,sep="_"), paste(sd.zt,3,sep="_"))])
+  
+  wave.ll <- sapply(seq(from=72,by=0.1,to=116), function(x) 
+    wave_parameters["ll.mesor.estimate"]+wave_parameters["ll.amplitude.estimate"]*cos(period*(x*pi/12-wave_parameters["ll.peak.time.hours"]*pi/12)))
+  
+  wave.ll.ggplot <- data.frame(x = seq(from=72,by=0.1,to=116), y = unlist(wave.ll),
+                               min.bound = unlist(wave.ll) - wave_parameters$error_amp_1,
+                               max.bound = unlist(wave.ll) + wave_parameters$error_amp_1)
+  points_ll <- data.frame(x=seq(from=72,by=4,to=116), y=genes.expression[gene.id,c(paste(ll.sd.zt,1,sep="_"),
+                                                                                   paste(ll.sd.zt,2,sep="_"))])
+  
+  min.limit <- min(c(points_sd$y), points_ll$y, wave.sd.ggplot$min.bound, wave.ll.ggplot$min.bound)
+  max.limit <- max(c(points_sd$y), points_ll$y, wave.sd.ggplot$max.bound, wave.ll.ggplot$max.bound)
+  
+  df_polygon_sd <- data.frame(
+    x = c(0,8,8,0,8,24,24,8,24,32,32,24,32,48,48,32,48,56,56,48,56,72,72,56,
+          72,80,80,72,80,96,96,80,96,104,104,96,104,120,120,104),
+    
+    y = rep(c(min.limit - (max.limit - min.limit)/25, min.limit - (max.limit - min.limit)/25, 
+              min.limit - (max.limit - min.limit)/50, min.limit - (max.limit - min.limit)/50), 10),
+    group = factor(rep(1:10, each = 4))
+  )
+  
+  if(data.points)
+  {
+    ggplot() +
+      geom_ribbon(data = wave.sd.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.1, alpha = 0.2) +
+      geom_line(data = wave.sd.ggplot, aes(x = x, y = y), color = color.1, size = 1) +
+      geom_point(data = points_sd, aes(x = x, y = y), color = color.1, size = 1, alpha=0.3) +
+      
+      geom_ribbon(data = wave.ll.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.2, alpha = 0.2) +
+      geom_line(data = wave.ll.ggplot, aes(x = x, y = y), color = color.2, size = 1) +
+      geom_point(data = points_ll, aes(x = x, y = y), color = color.2, size = 1, alpha=0.3) +
+      scale_x_continuous(
+        breaks = seq(from=0,to=116,by=4),                
+        labels = c(paste0("ZT", rep(seq(0,20,4),3)), paste0("CT", rep(seq(0,20,4),2)))) +
+      scale_y_continuous(limits = c(min.limit - (max.limit - min.limit)/25, 
+                                    max.limit)) +
+      labs(title = gene.id,
+           y = "FPKM",
+           x = "") +
+      theme(
+        panel.background = element_rect(fill = "transparent",
+                                        colour = NA_character_), # necessary to avoid drawing panel outline
+        panel.grid.major = element_blank(), # get rid of major grid
+        panel.grid.minor = element_blank(), # get rid of minor grid
+        plot.background = element_rect(fill = "transparent",
+                                       colour = NA_character_), # necessary to avoid drawing plot outline
+        legend.background = element_rect(fill = "transparent"),
+        legend.box.background = element_rect(fill = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.position = "none",
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(
+          size = 10, angle = 90, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.text.y = element_text(
+          size = 12, angle = 0, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.title.y = element_text(
+          size = 12, angle = 90, vjust = 2.5, hjust = 0.5,
+          face = "bold", color = "black"
+        )) +
+      geom_polygon(
+        data = df_polygon_sd,
+        aes(x, y, fill = group, group = group),
+        inherit.aes = FALSE,
+        color = color.1
+      ) +
+      scale_fill_manual(values = c(rep(c("white", color.1), 3), rep(c("white", color.2), 2)))
+  }
+  else
+  {
+    ggplot() +
+      geom_ribbon(data = wave.sd.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.1, alpha = 0.2) +
+      geom_line(data = wave.sd.ggplot, aes(x = x, y = y), color = color.1, size = 1) +
+      
+      geom_ribbon(data = wave.ll.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.2, alpha = 0.2) +
+      geom_line(data = wave.ll.ggplot, aes(x = x, y = y), color = color.2, size = 1) +
+      scale_x_continuous(
+        breaks = seq(from=0,to=116,by=4),                
+        labels = c(paste0("ZT", rep(seq(0,20,4),3)), paste0("CT", rep(seq(0,20,4),2)))) +
+      scale_y_continuous(limits = c(min.limit - (max.limit - min.limit)/25, 
+                                    max.limit)) +
+      labs(title = gene.id,
+           y = "FPKM",
+           x = "") +
+      theme(
+        panel.background = element_rect(fill = "transparent",
+                                        colour = NA_character_), # necessary to avoid drawing panel outline
+        panel.grid.major = element_blank(), # get rid of major grid
+        panel.grid.minor = element_blank(), # get rid of minor grid
+        plot.background = element_rect(fill = "transparent",
+                                       colour = NA_character_), # necessary to avoid drawing plot outline
+        legend.background = element_rect(fill = "transparent"),
+        legend.box.background = element_rect(fill = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.position = "none",
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(
+          size = 10, angle = 90, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.text.y = element_text(
+          size = 12, angle = 0, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.title.y = element_text(
+          size = 12, angle = 90, vjust = 2.5, hjust = 0.5,
+          face = "bold", color = "black"
+        )) +
+      geom_polygon(
+        data = df_polygon_sd,
+        aes(x, y, fill = group, group = group),
+        inherit.aes = FALSE,
+        color = color.1
+      ) +
+      scale_fill_manual(values = c(rep(c("white", color.1), 3), rep(c("white", color.2), 2)))
+  }
+  
+}
+
+# SD DD
+plot.sd.dd.wave.error <- function(gene.id, gene.name="", genes.expression, period=1, 
+                                  wave_parameters.df, data.points = F, 
+                                  color.1 = "tomato3", color.2="red4")
+{
+  wave_parameters <- wave_parameters.df[gene.id,]
+  
+  wave.sd <- sapply(seq(from=0,by=0.1,to=68), function(x) 
+    wave_parameters["sd.mesor.estimate"]+wave_parameters["sd.amplitude.estimate"]*cos(period*(x*pi/12-wave_parameters["sd.peak.time.hours"]*pi/12)))
+  
+  wave.sd.ggplot <- data.frame(x = seq(from=0,by=0.1,to=68), y = unlist(wave.sd),
+                               min.bound = unlist(wave.sd) - wave_parameters$error_amp_2,
+                               max.bound = unlist(wave.sd) + wave_parameters$error_amp_2)
+  points_sd <- data.frame(x=seq(from=0,by=4,to=68), y=genes.expression[gene.id,c(paste(sd.zt,1,sep="_"),paste(sd.zt,2,sep="_"), paste(sd.zt,3,sep="_"))])
+  
+  wave.dd <- sapply(seq(from=72,by=0.1,to=116), function(x) 
+    wave_parameters["dd.mesor.estimate"]+wave_parameters["dd.amplitude.estimate"]*cos(period*(x*pi/12-wave_parameters["dd.peak.time.hours"]*pi/12)))
+  
+  wave.dd.ggplot <- data.frame(x = seq(from=72,by=0.1,to=116), y = unlist(wave.dd),
+                               min.bound = unlist(wave.dd) - wave_parameters$error_amp_1,
+                               max.bound = unlist(wave.dd) + wave_parameters$error_amp_1)
+  points_dd <- data.frame(x=seq(from=72,by=4,to=116), y=genes.expression[gene.id,c(paste(dd.sd.zt,1,sep="_"),
+                                                                                   paste(dd.sd.zt,2,sep="_"))])
+  
+  min.limit <- min(c(points_sd$y), points_dd$y, wave.sd.ggplot$min.bound, wave.dd.ggplot$min.bound)
+  max.limit <- max(c(points_sd$y), points_dd$y, wave.sd.ggplot$max.bound, wave.dd.ggplot$max.bound)
+  
+  df_polygon_sd <- data.frame(
+    x = c(0,8,8,0,8,24,24,8,24,32,32,24,32,48,48,32,48,56,56,48,56,72,72,56,
+          72,80,80,72,80,96,96,80,96,104,104,96,104,120,120,104),
+    
+    y = rep(c(min.limit - (max.limit - min.limit)/25, min.limit - (max.limit - min.limit)/25, 
+              min.limit - (max.limit - min.limit)/50, min.limit - (max.limit - min.limit)/50), 10),
+    group = factor(rep(1:10, each = 4))
+  )
+  
+  if(data.points)
+  {
+    ggplot() +
+      geom_ribbon(data = wave.sd.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.1, alpha = 0.2) +
+      geom_line(data = wave.sd.ggplot, aes(x = x, y = y), color = color.1, size = 1) +
+      geom_point(data = points_sd, aes(x = x, y = y), color = color.1, size = 1, alpha=0.3) +
+      
+      geom_ribbon(data = wave.dd.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.2, alpha = 0.2) +
+      geom_line(data = wave.dd.ggplot, aes(x = x, y = y), color = color.2, size = 1) +
+      geom_point(data = points_dd, aes(x = x, y = y), color = color.2, size = 1, alpha=0.3) +
+      scale_x_continuous(
+        breaks = seq(from=0,to=116,by=4),                
+        labels = c(paste0("ZT", rep(seq(0,20,4),3)), paste0("CT", rep(seq(0,20,4),2)))) +
+      scale_y_continuous(limits = c(min.limit - (max.limit - min.limit)/25, 
+                                    max.limit)) +
+      labs(title = gene.id,
+           y = "FPKM",
+           x = "") +
+      theme(
+        panel.background = element_rect(fill = "transparent",
+                                        colour = NA_character_), # necessary to avoid drawing panel outline
+        panel.grid.major = element_blank(), # get rid of major grid
+        panel.grid.minor = element_blank(), # get rid of minor grid
+        plot.background = element_rect(fill = "transparent",
+                                       colour = NA_character_), # necessary to avoid drawing plot outline
+        legend.background = element_rect(fill = "transparent"),
+        legend.box.background = element_rect(fill = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.position = "none",
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(
+          size = 10, angle = 90, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.text.y = element_text(
+          size = 12, angle = 0, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.title.y = element_text(
+          size = 12, angle = 90, vjust = 2.5, hjust = 0.5,
+          face = "bold", color = "black"
+        )) +
+      geom_polygon(
+        data = df_polygon_sd,
+        aes(x, y, fill = group, group = group),
+        inherit.aes = FALSE,
+        color = color.1
+      ) +
+      scale_fill_manual(values = c(rep(c("white", color.1), 3), rep(c(color.2,color.1), 2)))
+  }
+  else
+  {
+    ggplot() +
+      geom_ribbon(data = wave.sd.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.1, alpha = 0.2) +
+      geom_line(data = wave.sd.ggplot, aes(x = x, y = y), color = color.1, size = 1) +
+      
+      geom_ribbon(data = wave.dd.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.2, alpha = 0.2) +
+      geom_line(data = wave.dd.ggplot, aes(x = x, y = y), color = color.2, size = 1) +
+      scale_x_continuous(
+        breaks = seq(from=0,to=116,by=4),                
+        labels = c(paste0("ZT", rep(seq(0,20,4),3)), paste0("CT", rep(seq(0,20,4),2)))) +
+      scale_y_continuous(limits = c(min.limit - (max.limit - min.limit)/25, 
+                                    max.limit)) +
+      labs(title = gene.id,
+           y = "FPKM",
+           x = "") +
+      theme(
+        panel.background = element_rect(fill = "transparent",
+                                        colour = NA_character_), # necessary to avoid drawing panel outline
+        panel.grid.major = element_blank(), # get rid of major grid
+        panel.grid.minor = element_blank(), # get rid of minor grid
+        plot.background = element_rect(fill = "transparent",
+                                       colour = NA_character_), # necessary to avoid drawing plot outline
+        legend.background = element_rect(fill = "transparent"),
+        legend.box.background = element_rect(fill = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.position = "none",
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(
+          size = 10, angle = 90, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.text.y = element_text(
+          size = 12, angle = 0, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.title.y = element_text(
+          size = 12, angle = 90, vjust = 2.5, hjust = 0.5,
+          face = "bold", color = "black"
+        )) +
+      geom_polygon(
+        data = df_polygon_sd,
+        aes(x, y, fill = group, group = group),
+        inherit.aes = FALSE,
+        color = color.1
+      ) +
+      scale_fill_manual(values = c(rep(c("white", color.1), 3), rep(c(color.2, color.1), 2)))
+  }
+  
+}
+
+# LD SD
+plot.ld.sd.wave.error <- function(gene.id, gene.name="", genes.expression, period=1, 
+                                  wave_parameters.df, data.points = F, 
+                                  color.1 = "royalblue3", color.2="tomato3")
+{
+  wave_parameters <- wave_parameters.df[gene.id,]
+  
+  wave.ld <- sapply(seq(from=0,by=0.1,to=68), function(x) 
+    wave_parameters["ld.mesor.estimate"]+wave_parameters["ld.amplitude.estimate"]*cos(period*(x*pi/12-wave_parameters["ld.peak.time.hours"]*pi/12)))
+  
+  wave.ld.ggplot <- data.frame(x = seq(from=0,by=0.1,to=68), y = unlist(wave.ld),
+                               min.bound = unlist(wave.ld) - wave_parameters$error_amp_1,
+                               max.bound = unlist(wave.ld) + wave_parameters$error_amp_1)
+  points_ld <- data.frame(x=seq(from=0,by=4,to=68), y=genes.expression[gene.id,c(paste(ld.zt,1,sep="_"),
+                                                                                 paste(ld.zt,2,sep="_"),
+                                                                                 paste(ld.zt,3,sep="_"))])
+  
+  wave.sd <- sapply(seq(from=0,by=0.1,to=68), function(x) 
+    wave_parameters["sd.mesor.estimate"]+wave_parameters["sd.amplitude.estimate"]*cos(period*(x*pi/12-wave_parameters["sd.peak.time.hours"]*pi/12)))
+  
+  wave.sd.ggplot <- data.frame(x = seq(from=0,by=0.1,to=68), y = unlist(wave.sd),
+                               min.bound = unlist(wave.sd) - wave_parameters$error_amp_2,
+                               max.bound = unlist(wave.sd) + wave_parameters$error_amp_2)
+  points_sd <- data.frame(x=seq(from=0,by=4,to=68), y=genes.expression[gene.id,c(paste(sd.zt,1,sep="_"),
+                                                                                 paste(sd.zt,2,sep="_"),
+                                                                                 paste(sd.zt,3,sep="_"))])
+  
+  min.limit <- min(c(points_ld$y), points_sd$y, wave.ld.ggplot$min.bound, wave.sd.ggplot$min.bound)
+  max.limit <- max(c(points_ld$y), points_sd$y, wave.ld.ggplot$max.bound, wave.sd.ggplot$max.bound)
+  
+  df_polygon_ld <- data.frame(
+    x = c(0,16,16,0,16,24,24,16,24,40,40,24,40,48,48,40,48,64,64,48,64,72,72,64),
+    
+    y = rep(c(min.limit - (max.limit - min.limit)/25, min.limit - (max.limit - min.limit)/25, 
+              min.limit - (max.limit - min.limit)/50, min.limit - (max.limit - min.limit)/50), 6),
+    group = factor(rep(1:6, each = 4))
+  )
+  
+  df_polygon_sd <- data.frame(
+    x = c(0,8,8,0,8,24,24,8,24,32,32,24,32,48,48,32,48,56,56,48,56,72,72,56),
+    
+    y = rep(c(min.limit - 3*(max.limit - min.limit)/50, min.limit - 3*(max.limit - min.limit)/50,
+              min.limit - (max.limit - min.limit)/25, min.limit - (max.limit - min.limit)/25), 6),
+    group = factor(rep(7:12, each = 4))
+  )
+  
+  
+  if(data.points)
+  {
+    ggplot() +
+      geom_ribbon(data = wave.ld.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.1, alpha = 0.2) +
+      geom_line(data = wave.ld.ggplot, aes(x = x, y = y), color = color.1, size = 1) +
+      geom_point(data = points_ld, aes(x = x, y = y), color = color.1, size = 1, alpha=0.3) +
+      
+      geom_ribbon(data = wave.sd.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.2, alpha = 0.2) +
+      geom_line(data = wave.sd.ggplot, aes(x = x, y = y), color = color.2, size = 1) +
+      geom_point(data = points_sd, aes(x = x, y = y), color = color.2, size = 1, alpha=0.3) +
+      scale_x_continuous(
+        breaks = seq(from=0,to=68,by=4),                
+        labels = paste0("ZT", rep(seq(0,20,4),3))) +
+      scale_y_continuous(limits = c(min.limit - (max.limit - min.limit)/12.5, 
+                                    max.limit)) +
+      labs(title = gene.id,
+           y = "FPKM",
+           x = "") +
+      theme(
+        panel.background = element_rect(fill = "transparent",
+                                        colour = NA_character_), # necessary to avoid drawing panel outline
+        panel.grid.major = element_blank(), # get rid of major grid
+        panel.grid.minor = element_blank(), # get rid of minor grid
+        plot.background = element_rect(fill = "transparent",
+                                       colour = NA_character_), # necessary to avoid drawing plot outline
+        legend.background = element_rect(fill = "transparent"),
+        legend.box.background = element_rect(fill = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.position = "none",
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(
+          size = 10, angle = 90, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.text.y = element_text(
+          size = 12, angle = 0, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.title.y = element_text(
+          size = 12, angle = 90, vjust = 2.5, hjust = 0.5,
+          face = "bold", color = "black"
+        )) +
+      geom_polygon(
+        data = df_polygon_ld,
+        aes(x, y, fill = group, group = group),
+        inherit.aes = FALSE,
+        color = color.1
+      ) +
+      geom_polygon(
+        data = df_polygon_sd,
+        aes(x, y, fill = group, group = group),
+        inherit.aes = FALSE,
+        color = color.2
+      ) +
+      scale_fill_manual(values = c(rep(c("white", color.1), 3), rep(c("white", color.2),3)))
+  }
+  else
+  {
+    ggplot() +
+      geom_ribbon(data = wave.ld.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.1, alpha = 0.2) +
+      geom_line(data = wave.ld.ggplot, aes(x = x, y = y), color = color.1, size = 1) +
+      
+      geom_ribbon(data = wave.sd.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.2, alpha = 0.2) +
+      geom_line(data = wave.sd.ggplot, aes(x = x, y = y), color = color.2, size = 1) +
+      scale_x_continuous(
+        breaks = seq(from=0,to=116,by=4),                
+        labels = c(paste0("ZT", rep(seq(0,20,4),3)), paste0("ZT", rep(seq(0,20,4),2)))) +
+      scale_y_continuous(limits = c(min.limit - (max.limit - min.limit)/12.5, 
+                                    max.limit)) +
+      labs(title = gene.id,
+           y = "FPKM",
+           x = "") +
+      theme(
+        panel.background = element_rect(fill = "transparent",
+                                        colour = NA_character_), # necessary to avoid drawing panel outline
+        panel.grid.major = element_blank(), # get rid of major grid
+        panel.grid.minor = element_blank(), # get rid of minor grid
+        plot.background = element_rect(fill = "transparent",
+                                       colour = NA_character_), # necessary to avoid drawing plot outline
+        legend.background = element_rect(fill = "transparent"),
+        legend.box.background = element_rect(fill = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.position = "none",
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(
+          size = 10, angle = 90, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.text.y = element_text(
+          size = 12, angle = 0, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.title.y = element_text(
+          size = 12, angle = 90, vjust = 2.5, hjust = 0.5,
+          face = "bold", color = "black"
+        )) +
+      geom_polygon(
+        data = df_polygon_ld,
+        aes(x, y, fill = group, group = group),
+        inherit.aes = FALSE,
+        color = color.1
+      ) +
+      geom_polygon(
+        data = df_polygon_sd,
+        aes(x, y, fill = group, group = group),
+        inherit.aes = FALSE,
+        color = color.2
+      ) +
+      scale_fill_manual(values = c(rep(c("white", color.1), 3), rep(c("white", color.2),3)))
+  }
+  
+}
+
+# LD SD with one or more conditions exhibiting a 12 h period
+plot.ld.sd.wave.error.12 <- function(gene.id, gene.name="", genes.expression, period1=1, period2=1,
+                                  wave_parameters.df1, wave_parameters.df2, data.points = F, 
+                                  color.1 = "royalblue3", color.2="tomato3")
+{
+  wave_parameters1 <- wave_parameters.df1[gene.id,]
+  wave_parameters2 <- wave_parameters.df2[gene.id,]
+  
+  wave.ld <- sapply(seq(from=0,by=0.1,to=68), function(x) 
+    wave_parameters1["mesor"]+wave_parameters1["amplitude"]*cos(period1*(x*pi/12-wave_parameters1["peak_time_hours"]*pi/12)))
+  
+  wave.ld.ggplot <- data.frame(x = seq(from=0,by=0.1,to=68), y = unlist(wave.ld),
+                               min.bound = unlist(wave.ld) - wave_parameters1$error_amp,
+                               max.bound = unlist(wave.ld) + wave_parameters1$error_amp)
+  points_ld <- data.frame(x=seq(from=0,by=4,to=68), y=genes.expression[gene.id,c(paste(ld.zt,1,sep="_"),
+                                                                                 paste(ld.zt,2,sep="_"),
+                                                                                 paste(ld.zt,3,sep="_"))])
+  
+  wave.sd <- sapply(seq(from=0,by=0.1,to=68), function(x) 
+    wave_parameters2["mesor"]+wave_parameters2["amplitude"]*cos(period2*(x*pi/12-wave_parameters2["peak_time_hours"]*pi/12)))
+  
+  wave.sd.ggplot <- data.frame(x = seq(from=0,by=0.1,to=68), y = unlist(wave.sd),
+                               min.bound = unlist(wave.sd) - wave_parameters2$error_amp,
+                               max.bound = unlist(wave.sd) + wave_parameters2$error_amp)
+  points_sd <- data.frame(x=seq(from=0,by=4,to=68), y=genes.expression[gene.id,c(paste(sd.zt,1,sep="_"),
+                                                                                 paste(sd.zt,2,sep="_"),
+                                                                                 paste(sd.zt,3,sep="_"))])
+  
+  min.limit <- min(c(points_ld$y), points_sd$y, wave.ld.ggplot$min.bound, wave.sd.ggplot$min.bound)
+  max.limit <- max(c(points_ld$y), points_sd$y, wave.ld.ggplot$max.bound, wave.sd.ggplot$max.bound)
+  
+  df_polygon_ld <- data.frame(
+    x = c(0,16,16,0,16,24,24,16,24,40,40,24,40,48,48,40,48,64,64,48,64,72,72,64),
+    
+    y = rep(c(min.limit - (max.limit - min.limit)/25, min.limit - (max.limit - min.limit)/25, 
+              min.limit - (max.limit - min.limit)/50, min.limit - (max.limit - min.limit)/50), 6),
+    group = factor(rep(1:6, each = 4))
+  )
+  
+  df_polygon_sd <- data.frame(
+    x = c(0,8,8,0,8,24,24,8,24,32,32,24,32,48,48,32,48,56,56,48,56,72,72,56),
+    
+    y = rep(c(min.limit - 3*(max.limit - min.limit)/50, min.limit - 3*(max.limit - min.limit)/50,
+              min.limit - (max.limit - min.limit)/25, min.limit - (max.limit - min.limit)/25), 6),
+    group = factor(rep(7:12, each = 4))
+  )
+  
+  
+  if(data.points)
+  {
+    ggplot() +
+      geom_ribbon(data = wave.ld.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.1, alpha = 0.2) +
+      geom_line(data = wave.ld.ggplot, aes(x = x, y = y), color = color.1, size = 1) +
+      geom_point(data = points_ld, aes(x = x, y = y), color = color.1, size = 1, alpha=0.3) +
+      
+      geom_ribbon(data = wave.sd.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.2, alpha = 0.2) +
+      geom_line(data = wave.sd.ggplot, aes(x = x, y = y), color = color.2, size = 1) +
+      geom_point(data = points_sd, aes(x = x, y = y), color = color.2, size = 1, alpha=0.3) +
+      scale_x_continuous(
+        breaks = seq(from=0,to=68,by=4),                
+        labels = paste0("ZT", rep(seq(0,20,4),3))) +
+      scale_y_continuous(limits = c(min.limit - (max.limit - min.limit)/12.5, 
+                                    max.limit)) +
+      labs(title = gene.id,
+           y = "FPKM",
+           x = "") +
+      theme(
+        panel.background = element_rect(fill = "transparent",
+                                        colour = NA_character_), # necessary to avoid drawing panel outline
+        panel.grid.major = element_blank(), # get rid of major grid
+        panel.grid.minor = element_blank(), # get rid of minor grid
+        plot.background = element_rect(fill = "transparent",
+                                       colour = NA_character_), # necessary to avoid drawing plot outline
+        legend.background = element_rect(fill = "transparent"),
+        legend.box.background = element_rect(fill = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.position = "none",
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(
+          size = 10, angle = 90, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.text.y = element_text(
+          size = 12, angle = 0, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.title.y = element_text(
+          size = 12, angle = 90, vjust = 2.5, hjust = 0.5,
+          face = "bold", color = "black"
+        )) +
+      geom_polygon(
+        data = df_polygon_ld,
+        aes(x, y, fill = group, group = group),
+        inherit.aes = FALSE,
+        color = color.1
+      ) +
+      geom_polygon(
+        data = df_polygon_sd,
+        aes(x, y, fill = group, group = group),
+        inherit.aes = FALSE,
+        color = color.2
+      ) +
+      scale_fill_manual(values = c(rep(c("white", color.1), 3), rep(c("white", color.2),3)))
+  }
+  else
+  {
+    ggplot() +
+      geom_ribbon(data = wave.ld.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.1, alpha = 0.2) +
+      geom_line(data = wave.ld.ggplot, aes(x = x, y = y), color = color.1, size = 1) +
+      
+      geom_ribbon(data = wave.sd.ggplot, aes(x = x, ymin = min.bound, ymax = max.bound),
+                  fill = color.2, alpha = 0.2) +
+      geom_line(data = wave.sd.ggplot, aes(x = x, y = y), color = color.2, size = 1) +
+      scale_x_continuous(
+        breaks = seq(from=0,to=116,by=4),                
+        labels = c(paste0("ZT", rep(seq(0,20,4),3)), paste0("ZT", rep(seq(0,20,4),2)))) +
+      scale_y_continuous(limits = c(min.limit - (max.limit - min.limit)/12.5, 
+                                    max.limit)) +
+      labs(title = gene.id,
+           y = "FPKM",
+           x = "") +
+      theme(
+        panel.background = element_rect(fill = "transparent",
+                                        colour = NA_character_), # necessary to avoid drawing panel outline
+        panel.grid.major = element_blank(), # get rid of major grid
+        panel.grid.minor = element_blank(), # get rid of minor grid
+        plot.background = element_rect(fill = "transparent",
+                                       colour = NA_character_), # necessary to avoid drawing plot outline
+        legend.background = element_rect(fill = "transparent"),
+        legend.box.background = element_rect(fill = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.position = "none",
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(
+          size = 10, angle = 90, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.text.y = element_text(
+          size = 12, angle = 0, vjust = 0.5, hjust = 1,
+          face = "bold", color = "black"),
+        axis.title.y = element_text(
+          size = 12, angle = 90, vjust = 2.5, hjust = 0.5,
+          face = "bold", color = "black"
+        )) +
+      geom_polygon(
+        data = df_polygon_ld,
+        aes(x, y, fill = group, group = group),
+        inherit.aes = FALSE,
+        color = color.1
+      ) +
+      geom_polygon(
+        data = df_polygon_sd,
+        aes(x, y, fill = group, group = group),
+        inherit.aes = FALSE,
+        color = color.2
+      ) +
+      scale_fill_manual(values = c(rep(c("white", color.1), 3), rep(c("white", color.2),3)))
+  }
+  
+}
