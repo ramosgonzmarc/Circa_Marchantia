@@ -175,7 +175,7 @@ write.table(results.ld,file="circacompare_ld_12.tsv", sep="\t")
 # With 24 h period
 library(circacompare)
 
-results.sd <- matrix(nrow=length(bg_set),ncol=6)
+results.sd <- matrix(nrow=length(bg_set),ncol=9)
 rownames(results.sd) <- bg_set
 dim(results.sd)
 
@@ -194,7 +194,9 @@ for(i in 1:length(bg_set))
     
     out.i <- circa_single(x = sd.df, col_time = "time", col_outcome = "measure", period = 24,
                           alpha_threshold = 1)
-    results.sd[i,] <- out.i[[2]][,2]
+    #results.sd[i,] <- out.i[[2]][,2]
+    error.i <- as.data.frame(circacompare:::extract_model_coefs(out.i$fit))[,2]
+    results.sd[i,] <- c(out.i[[2]][,2], error.i)
   }
   else
   {
@@ -202,8 +204,9 @@ for(i in 1:length(bg_set))
   }
 }
 
-colnames(results.sd) <- out.i[[2]][,1]
-write.table(results.sd,file="circacompare_sd_24.tsv", sep="\t")
+colnames(results.sd) <- c(out.i[[2]][,1], "error_mesor", "error_amp", "error_phase")
+write.table(results.sd,file="circacompare_sd_24_with_errors.tsv", sep="\t")
+
 
 # With 12 h period
 library(circacompare)
@@ -924,7 +927,7 @@ png("ld_dd_ll_venn.png", res=300, width = 1500, height = 1500)
 grid.newpage()
 draw.pairwise.venn(area1 = length(complete.ld.dd.rhythmic.genes), area2 = length(complete.ld.ll.rhythmic.genes),
                    cross.area = length(intersect(complete.ld.dd.rhythmic.genes,complete.ld.ll.rhythmic.genes)),
-                   lwd = 3,category = c("LD-DD","LD-LL"),euler.d = T,col = c("blue","red"),fill = c("blue","red"),
+                   lwd = 3,category = c("LD-DD","LD-LL"),euler.d = T,col = c("darkblue","lightskyblue"),fill = c("darkblue","lightskyblue"),
                    alpha = 0.3,cex = 2,cat.cex = 2,cat.dist = c(0.035,0.035), cat.pos = c(210,150))
 dev.off()
 
@@ -971,29 +974,29 @@ barplot(as.matrix(data.sd.ll[1:5,]), lwd=3, names.arg = "",cex.names = 2,cex.axi
 dev.off()
 
 # Venn for SD DD and LL
-png("sd_dd_ll_venn.png", res=300, width = 1500, height = 1500)
+png("images/sd_dd_ll_venn.png", res=300, width = 1500, height = 1500)
 grid.newpage()
 draw.pairwise.venn(area1 = length(complete.sd.dd.rhythmic.genes), area2 = length(complete.sd.ll.rhythmic.genes),
                    cross.area = length(intersect(complete.sd.dd.rhythmic.genes,complete.sd.ll.rhythmic.genes)),
-                   lwd = 3,category = c("SD-DD","SD-LL"),euler.d = T,col = c("blue","red"),fill = c("blue","red"),
+                   lwd = 3,category = c("SD-DD","SD-LL"),euler.d = T,col = c("darkred","salmon"),fill = c("darkred","salmon"),
                    alpha = 0.3,cex = 2,cat.cex = 2,cat.dist = c(0.035,0.035), cat.pos = c(210,150))
 dev.off()
 
 # Venn for genes that retained rhythmicity in LL under LD and SD
-png("ld_sd_ll.png", width = 1500, height = 1500, res=300)
+png("images/ld_sd_ll.png", width = 1500, height = 1500, res=300)
 grid.newpage()
 draw.pairwise.venn(area1 = length(complete.ld.ll.rhythmic.genes), area2 = length(complete.sd.ll.rhythmic.genes),
                    cross.area = length(intersect(complete.ld.ll.rhythmic.genes,complete.sd.ll.rhythmic.genes)),
-                   lwd = 3,category = c("LD_LL","SD_LL"),euler.d = T,col = "black",fill = c("blue","red"),
+                   lwd = 3,category = c("LD_LL","SD_LL"),euler.d = T,col = c("lightskyblue","salmon"),fill = c("lightskyblue","salmon"),
                    alpha = 0.65,cex = 2,cat.cex = 2,cat.dist = c(0.035,0.035), cat.pos = c(210,150))
 dev.off()
 
 # Venn for genes that retained rhythmicity in DD under LD and SD
-png("ld_sd_dd.png", width = 1500, height = 1500, res=300)
+png("images/ld_sd_dd.png", width = 1500, height = 1500, res=300)
 grid.newpage()
 draw.pairwise.venn(area1 = length(complete.ld.dd.rhythmic.genes), area2 = length(complete.sd.dd.rhythmic.genes),
                    cross.area = length(intersect(complete.ld.dd.rhythmic.genes,complete.sd.dd.rhythmic.genes)),
-                   lwd = 3,category = c("LD_DD","SD_DD"),euler.d = T,col = "black",fill = c("blue","red"),
+                   lwd = 3,category = c("LD_DD","SD_DD"),euler.d = T,col = c("darkblue","darkred"),fill = c("darkblue","darkred"),
                    alpha = 0.65,cex = 2,cat.cex = 2,cat.dist = c(0.035,0.035), cat.pos = c(210,150))
 dev.off()
 
@@ -2107,8 +2110,20 @@ write.table(unimod_sd, "tables/gos_sd_unimodal.tsv", sep = "\t", row.names = F)
 write.table(multimod_ld, "tables/gos_ld_multimodal.tsv", sep = "\t", row.names = F)
 write.table(multimod_sd, "tables/gos_sd_multimodal.tsv", sep = "\t", row.names = F)
 
+total_go_ld <- unique(c(unimod_ld, multimod_ld))
+total_go_sd <- unique(c(unimod_sd, multimod_sd))
+
 
 library(VennDiagram)
+png("ld_sd_total_go.png", res=300, width = 1500, height = 1500)
+grid.newpage()
+draw.pairwise.venn(area1 = length(total_go_ld), area2 = length(total_go_sd),
+                   cross.area = length(intersect(total_go_ld,total_go_sd)),
+                   lwd = 3,category = c("LD","SD"),euler.d = T,col = c("blue","red"),fill = c("blue","red"),
+                   alpha = 0.3,cex = 2,cat.cex = 2,cat.dist = c(0.035,0.035), cat.pos = c(210,150))
+dev.off()
+
+
 png("ld_sd_unimod_go.png", res=300, width = 1500, height = 1500)
 grid.newpage()
 draw.pairwise.venn(area1 = length(unimod_ld), area2 = length(unimod_sd),
@@ -2162,6 +2177,7 @@ sum(gen.dist.sd$gen_dist_p_value_adj < 0.05) # 256 non-uniform GO terms present 
 go_dist_gen_ld <- rownames(gen.dist.ld)[which(gen.dist.ld$gen_dist_p_value_adj < 0.05)]
 go_dist_gen_sd <- rownames(gen.dist.sd)[which(gen.dist.sd$gen_dist_p_value_adj < 0.05)]
 
+
 png("ld_sd_general_dist.png", res=300, width = 1500, height = 1500)
 grid.newpage()
 draw.pairwise.venn(area1 = length(go_dist_gen_ld), area2 = length(go_dist_gen_sd),
@@ -2208,9 +2224,9 @@ go_diff_ld_sd_clean_bh <- p.adjust(unlist(go_diff_ld_sd_clean), method = "BH")
 go_diff_ld_sd_table <- data.frame(gen_dist_p_value=unlist(go_diff_ld_sd_clean), 
                              gen_dist_p_value_adj=go_diff_ld_sd_clean_bh)
 
-write.table(go_diff_ld_sd_table,file="tables/go_diff_ld_sd_table_filtered", sep="\t")
+write.table(go_diff_ld_sd_table,file="tables/go_diff_ld_sd_table_filtered.tsv", sep="\t")
 
-go_diff_ld_sd_table <- read.table("tables/go_diff_ld_sd_table_filtered", sep="\t", header = T)
+go_diff_ld_sd_table <- read.table("tables/go_diff_ld_sd_table_filtered.tsv", sep="\t", header = T)
 
 sum(go_diff_ld_sd_table$gen_dist_p_value_adj < 0.05) # 525 change their distribution between LD and SD
 change_gos <- rownames(go_diff_ld_sd_table)[which(go_diff_ld_sd_table$gen_dist_p_value_adj < 0.05)]
@@ -3799,6 +3815,7 @@ source("functions_circa_marchantia.R")
 photoreceptors <- c("Mp2g16090", "Mp2g17590", "Mp2g11590", "Mp5g03810")
 photoreceptors %in% complete.ld.rhythmic.genes
 photoreceptors %in% complete.sd.rhythmic.genes
+
 
 plot.ld.sd("Mp2g16090", "MpPHY", genes.expression = genes.expression)
 plot.ld.sd("Mp2g17590", "MpCRY", genes.expression = genes.expression)
